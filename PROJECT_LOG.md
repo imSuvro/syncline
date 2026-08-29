@@ -9,7 +9,7 @@ a member in one browser and their local data vanishes in the other.
 
 | # | Stage | Role | Status | Tag |
 |----|-------|------|--------|-----|
-| 1 | Research | Product Owner | in progress | |
+| 1 | Research | Product Owner | done | v0.1 |
 | 1b | Hosting research | Architect | in progress | |
 | 2 | Product definition (PRD) | Product Owner | pending | |
 | 3 | Feasibility spike | Architect | pending | |
@@ -66,6 +66,20 @@ Tag mapping (1b gets its own tag): stage 1→v0.1, 1b→v0.2, 2→v0.3, 3→v0.4
   disabled, not enforced for admins as the emergency hatch.
 
 ## Stage notes
+
+- **Stage 1 (research).** Six systems surveyed with all claims traced to
+  sources fetched 2026-08-29 (docs/research.md). Headline findings: no
+  surveyed system documents revocation; the only active-forget precedent is
+  Linear's sync-group removal, known solely via CTO-endorsed reverse
+  engineering; PowerSync is the only system evaluating permissions inside the
+  sync service (JWT-derived buckets, `removed_buckets` checkpoint diffs) but
+  leaves offline devices and token revocation unsolved; ElectricSQL has the
+  best wire docs but zero authorization in the protocol by design; Zero
+  rejects offline writes entirely; Automerge structurally cannot forget
+  (full-history CRDT). Gap statement: permissions in the sync layer + a
+  specified, acknowledged forget message + a stranger-implementable protocol
+  doc covering the full loop — no surveyed system delivers any two of the
+  three together.
 
 ## NEEDS-HUMAN
 
