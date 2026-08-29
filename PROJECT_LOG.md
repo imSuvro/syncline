@@ -12,7 +12,7 @@ a member in one browser and their local data vanishes in the other.
 | 1 | Research | Product Owner | done | v0.1 |
 | 1b | Hosting research | Architect | done | v0.2 |
 | 2 | Product definition (PRD) | Product Owner | done | v0.3 |
-| 3 | Feasibility spike | Architect | pending | |
+| 3 | Feasibility spike | Architect | done | v0.4 |
 | 4 | UX | UX Designer | pending | |
 | 5 | Architecture (ADRs) | Architect | pending | |
 | 6 | Planning (backlog) | Product Owner | pending | |
@@ -80,6 +80,22 @@ Tag mapping (1b gets its own tag): stage 1→v0.1, 1b→v0.2, 2→v0.3, 3→v0.4
   specified, acknowledged forget message + a stranger-implementable protocol
   doc covering the full loop — no surveyed system delivers any two of the
   three together.
+
+- **Stage 3 (spike numbers).** `spike/spike.mjs` (throwaway, deleted at
+  stage 7): 2 simulated clients, in-memory server with append-only op log +
+  server-assigned seq, per-field LWW by seq, seeded random interleaving with
+  connectivity drops, offline outbox replay, idempotent push by
+  (clientId, clientOpId) with gap detection. Results on the dev machine
+  (Node 22.22): 10k mutations + 5.4k sync rounds converge in ~32 ms
+  (~307k mutations/sec through the whole loop); duplicate-push replay of an
+  acked batch is a verified no-op; same seed twice → byte-identical state
+  fingerprint (determinism holds with zero effort at this scale, validating
+  the injected-PRNG design). At 100k mutations the naive spike drops to
+  ~46k mutations/sec because its pull is a full-log filter (O(n) per sync) —
+  an artifact of spike laziness; the real server pulls by indexed cursor.
+  Optimistic view = base + outbox replay via `structuredClone` was
+  negligible at 50 rows × 4 fields; the real client materializes
+  incrementally anyway. Feasibility confirmed; no scale surprises.
 
 ## NEEDS-HUMAN
 
