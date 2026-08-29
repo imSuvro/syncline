@@ -13,7 +13,7 @@ a member in one browser and their local data vanishes in the other.
 | 1b | Hosting research | Architect | done | v0.2 |
 | 2 | Product definition (PRD) | Product Owner | done | v0.3 |
 | 3 | Feasibility spike | Architect | done | v0.4 |
-| 4 | UX | UX Designer | pending | |
+| 4 | UX | UX Designer | done | v0.5 |
 | 5 | Architecture (ADRs) | Architect | pending | |
 | 6 | Planning (backlog) | Product Owner | pending | |
 | 7 | Repo + CI | DevOps | pending | |
@@ -96,6 +96,17 @@ Tag mapping (1b gets its own tag): stage 1→v0.1, 1b→v0.2, 2→v0.3, 3→v0.4
   Optimistic view = base + outbox replay via `structuredClone` was
   negligible at 50 rows × 4 fields; the real client materializes
   incrementally anyway. Feasibility confirmed; no scale surprises.
+
+- **Stage 4 (UX).** Direction: "instrument panel" — calm paper-toned tracker
+  UI, with everything the engine says (connection pill, pending counts, seq
+  numbers, forget instructions) rendered as monospace telemetry; signature
+  element is the sync ticker narrating the live op stream, so the revoke
+  showcase is visibly announced on the wire one beat before rows dissolve.
+  docs/ux.md pins flows, seed cast (Priya/Maya/Theo/Sam, 2 workspaces), the
+  revoke choreography, and the view-model contract the client package must
+  expose. High-fidelity mockups: docs/design/mockups.html, published as a
+  Claude artifact:
+  https://claude.ai/code/artifact/0a897e70-57a3-4184-b8bd-613499eb1569
 
 ## NEEDS-HUMAN
 
