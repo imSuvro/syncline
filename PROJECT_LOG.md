@@ -10,7 +10,7 @@ a member in one browser and their local data vanishes in the other.
 | # | Stage | Role | Status | Tag |
 |----|-------|------|--------|-----|
 | 1 | Research | Product Owner | done | v0.1 |
-| 1b | Hosting research | Architect | in progress | |
+| 1b | Hosting research | Architect | done | v0.2 |
 | 2 | Product definition (PRD) | Product Owner | pending | |
 | 3 | Feasibility spike | Architect | pending | |
 | 4 | UX | UX Designer | pending | |
@@ -83,4 +83,57 @@ Tag mapping (1b gets its own tag): stage 1→v0.1, 1b→v0.2, 2→v0.3, 3→v0.4
 
 ## NEEDS-HUMAN
 
-(none yet)
+- **DECISION REQUIRED: server hosting** (from stage 1b, `docs/adr/000-hosting.md`).
+  *Recommendation:* Cloudflare Workers + SQLite-backed Durable Objects — the only
+  option satisfying every hard constraint and technical requirement at once:
+  SQLite DOs are on the free plan (100k req/day, 13k GB-s/day, 5M row-reads +
+  100k row-writes/day, 5 GB), the WebSocket Hibernation API holds connections
+  at zero duration cost (incoming billed 20:1, outgoing free, ~2M incoming
+  msgs/day headroom), nothing sleeps into a wake delay, overruns fail with
+  errors instead of charges, and it needs zero new accounts and zero card —
+  wrangler is already logged in on this machine. Runner-up Railway is only
+  free for ~30 days; Render wakes for ~60 s after 15 idle minutes and its free
+  Postgres expires in 30 days; Supabase Realtime can't host our authority
+  logic; Fly requires a card. Full comparison in the ADR.
+  *Setup steps per option:*
+  - **(a) Cloudflare (recommended — already satisfied, nothing to do):**
+    1. Verify: run `npx wrangler whoami` → expect "You are logged in with an
+       OAuth Token, associated with the email suvro.samajder@gmail.com" and an
+       account table with workers write scope. That's it.
+    2. Only if step 1 ever fails: `npx wrangler login` → browser opens a
+       dash.cloudflare.com consent page → click "Allow" → terminal prints
+       "Successfully logged in." → re-run `npx wrangler whoami` to verify.
+  - **(b) Railway (rank 2, ~30 free days):**
+    1. Open https://railway.com → "Login" → "Sign in with GitHub" → click
+       "Authorize Railway" (GitHub-verified accounts get the full $5/30-day
+       trial; no card).
+    2. `npm i -g @railway/cli` → `railway login` → browser opens → click
+       "Verify" → terminal shows "Logged in as <name>".
+    3. `railway init` (name the project) → `railway up` → expect build logs
+       ending in a live deployment.
+    4. Dashboard → service → Settings → Networking → "Generate Domain" →
+       yields the `wss://….up.railway.app` endpoint.
+    5. Note: trial volumes are deleted 30 days after credit expiry; the $1/mo
+       free plan sustains an always-on service only ~5–6 days/month.
+  - **(c) Render (rank 3, free forever but ~60 s wake after 15 idle min):**
+    1. Open https://dashboard.render.com/register → "Sign up with GitHub" →
+       authorize → verify email (officially card-free; an anti-abuse card
+       prompt may appear — it is not charged).
+    2. Dashboard → "New +" → "Web Service" → connect the GitHub repo →
+       Instance Type "Free" → "Create Web Service" → wait for "Live" at
+       `https://<name>.onrender.com` (wss:// works on it).
+    3. Optional DB: "New +" → "Postgres" → "Free" → "Create Database"; set a
+       calendar reminder — it expires 30 days after creation (+14-day grace).
+  - **(d) Supabase (rank 4, transport mismatch — listed for completeness):**
+    1. https://supabase.com/dashboard → "Sign in with GitHub" → "Authorize
+       supabase" → "New project" → free org → name/password/region → wait
+       ~2 min.
+    2. Settings → API → copy project URL + anon key; Realtime ceilings: 200
+       concurrent, 100 msg/s, 2M msgs/month; project pauses after ~1 idle
+       week (manual "Resume project" in dashboard).
+  - **(e) Fly.io: not actionable** — requires a credit card or $25 minimum
+    prepaid credits; violates the $0/no-card constraint. Do not proceed.
+  *Default if no answer arrives:* stage 8 builds against **option (a),
+  Cloudflare**, per the zero-new-accounts/zero-card rule. Since (a) needs no
+  human steps, this decision only requires action if you want a DIFFERENT
+  platform.
