@@ -11,7 +11,7 @@ a member in one browser and their local data vanishes in the other.
 |----|-------|------|--------|-----|
 | 1 | Research | Product Owner | done | v0.1 |
 | 1b | Hosting research | Architect | done | v0.2 |
-| 2 | Product definition (PRD) | Product Owner | pending | |
+| 2 | Product definition (PRD) | Product Owner | done | v0.3 |
 | 3 | Feasibility spike | Architect | pending | |
 | 4 | UX | UX Designer | pending | |
 | 5 | Architecture (ADRs) | Architect | pending | |
