@@ -15,6 +15,16 @@ import type {
 } from '../core/types.js';
 import { createIdbStorage, createMemoryClientStorage, type ClientStorage } from './idb.js';
 
+/** One line of the sync ticker (docs/ux.md): the wire, made visible. */
+export interface FeedFrame {
+  dir: 'up' | 'down';
+  label: string;
+  seq?: number;
+  kind: 'op' | 'push' | 'forget' | 'meta';
+}
+
+const FEED_MAX = 50;
+
 export interface SynclineClientOptions {
   /** http(s) base of the sync server, e.g. https://syncline.example.com */
   serverUrl: string;
@@ -36,6 +46,8 @@ export class SynclineClient {
   private chain: Promise<void> = Promise.resolve();
   private pendingWrites: Promise<void> = Promise.resolve();
   private simulatedOffline = false;
+  private readonly feed: FeedFrame[] = [];
+  private readonly feedListeners = new Set<() => void>();
 
   constructor(opts: SynclineClientOptions) {
     this.opts = opts;
@@ -116,22 +128,47 @@ export class SynclineClient {
     return () => this.eventListeners.delete(listener);
   }
 
+  /** The sync ticker's contents, newest last. */
+  getFeed(): readonly FeedFrame[] {
+    return this.feed;
+  }
+
+  onFeed(listener: () => void): () => void {
+    this.feedListeners.add(listener);
+    return () => this.feedListeners.delete(listener);
+  }
+
+  private pushFeed(frame: FeedFrame): void {
+    this.feed.push(frame);
+    if (this.feed.length > FEED_MAX) this.feed.shift();
+    for (const listener of this.feedListeners) listener();
+  }
+
   // --- core plumbing -------------------------------------------------------
 
   private input(input: ClientInput): void {
     // Serialize steps: each step's effects finish (incl. awaited barriers)
-    // before the next step runs.
+    // before the next step runs. The catch is load-bearing: without it a
+    // single storage failure would reject the chain and every later step
+    // would be skipped in silence — the engine would look alive and accept
+    // nothing.
     this.chain = this.chain.then(async () => {
       const effects = clientStep(this.state, input);
       for (const effect of effects) await this.execute(effect);
+    }).catch((cause: unknown) => {
+      for (const listener of this.eventListeners) {
+        listener({ kind: 'protocolError', code: `storage: ${String(cause)}` });
+      }
     });
   }
 
   private async execute(effect: ClientEffect): Promise<void> {
     switch (effect.type) {
       case 'storageWrite': {
-        const write = this.storage.applyBatch(effect.records);
-        this.pendingWrites = this.pendingWrites.then(() => write);
+        // Queue behind prior writes rather than racing them: batches must
+        // land in emission order (a snapshot's clearAll must not overtake
+        // the rows written after it).
+        this.pendingWrites = this.pendingWrites.then(() => this.storage.applyBatch(effect.records));
         return;
       }
       case 'storageBarrier':
@@ -147,6 +184,17 @@ export class SynclineClient {
       case 'send': {
         const frame: ClientFrame =
           effect.frame.t === 'hello' ? { ...effect.frame, token: this.opts.token } : effect.frame;
+        if (frame.t === 'push') {
+          for (const op of frame.ops) {
+            this.pushFeed({
+              dir: 'up',
+              kind: 'push',
+              label: `push op=${String(op.opId)} ${op.op.kind === 'update' ? op.op.field : op.op.kind}`,
+            });
+          }
+        } else if (frame.t === 'hello') {
+          this.pushFeed({ dir: 'up', kind: 'meta', label: `hello v${String(frame.schemaVersion)}` });
+        }
         this.socket?.send(encodeFrame(frame));
         return;
       }
@@ -177,6 +225,39 @@ export class SynclineClient {
     }
   }
 
+  private recordIncoming(frame: ServerFrame): void {
+    switch (frame.t) {
+      case 'ops':
+        for (const entry of frame.ops) {
+          this.pushFeed({
+            dir: 'down',
+            kind: 'op',
+            seq: entry.seq,
+            label: `${entry.op.rowId} ${entry.op.kind === 'update' ? entry.op.field : entry.op.kind}`,
+          });
+        }
+        return;
+      case 'snapshot':
+        this.pushFeed({
+          dir: 'down',
+          kind: 'meta',
+          seq: frame.atSeq,
+          label: `snapshot ${String(frame.rows.length)} rows`,
+        });
+        return;
+      case 'forget':
+        this.pushFeed({
+          dir: 'down',
+          kind: 'forget',
+          seq: frame.upToSeq,
+          label: `forget workspace=${this.opts.workspaceId}`,
+        });
+        return;
+      default:
+        return;
+    }
+  }
+
   private openSocket(): void {
     if (this.socket !== undefined) return;
     const wsBase = this.opts.serverUrl.replace(/^http/, 'ws');
@@ -187,7 +268,9 @@ export class SynclineClient {
     };
     socket.onmessage = (ev: MessageEvent) => {
       const frame: ServerFrame | null = decodeServerFrame(String(ev.data));
-      if (frame !== null) this.input({ type: 'serverFrame', frame, now: Date.now() });
+      if (frame === null) return;
+      this.recordIncoming(frame);
+      this.input({ type: 'serverFrame', frame, now: Date.now() });
     };
     socket.onclose = () => {
       if (this.socket === socket) this.socket = undefined;

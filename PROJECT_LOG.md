@@ -22,7 +22,7 @@ a member in one browser and their local data vanishes in the other.
 | 10 | Client engine | Dev | done | v0.11 |
 | 11 | Partial replication + permissions | Dev | done | v0.12 |
 | 12 | Conflicts + migration | Dev | done | v0.13 |
-| 13 | Demo app | Dev | pending | |
+| 13 | Demo app | Dev | done | v0.14 |
 | 14 | Testing | QA | pending | |
 | 15 | Review | QA/Dev | pending | |
 | 16 | Deploy | DevOps | pending | |
@@ -223,6 +223,28 @@ Tag mapping (1b gets its own tag): stage 1→v0.1, 1b→v0.2, 2→v0.3, 3→v0.4
   same-field races resolving identically on both clients by server order,
   stale offline edits landing last, and convergence across five seeded
   interleavings with connection drops. 70 tests.
+
+- **Stage 13 (demo app).** Vite + React issue tracker on `@syncline/client`,
+  built to docs/ux.md and the mockups: login-as picker (no signup), sidebar
+  with live workspace list and member panel, inline issue editing, the
+  connection pill with its demo-only offline toggle, pending badge,
+  presence dots, attribution flashes, the sync ticker, invite/revoke with
+  the confirm dialog, and the removal card. **Verified live in two browser
+  sessions against the running server** — not merely built: (a) Maya edits
+  offline, the pill reads `offline · 1 saved locally` and the row shows
+  pending while nothing goes out; on reconnect the ticker shows
+  `▲ push op=1 status` then `▼ seq=26`, the badge clears, and Priya's tab
+  independently shows the same value — offline convergence proven across
+  clients; (b) Priya revokes Maya, and Maya's tab prints
+  `▼ seq=26 forget workspace=acme`, drops all 22 issues, shows the removal
+  card, and her IndexedDB for that workspace comes back with zero rows and
+  zero outbox entries — the revoke moment, working. Three real bugs found
+  by driving the actual UI: a React memo keyed on a stable setter froze
+  every engine snapshot at first render (the pending badge never moved); a
+  rejected storage batch could poison the effect chain and silently freeze
+  the client forever (now caught and surfaced); and storage batches raced
+  instead of queueing, so a snapshot's clearAll could overtake the rows
+  written after it.
 
 ## NEEDS-HUMAN
 
