@@ -9,6 +9,7 @@ import {
   type ClientFrame,
   type RowState,
 } from '@syncline/protocol';
+import { evaluate, rowValues, type Principal, type Ruleset, type ServerFrame } from '@syncline/protocol';
 import {
   createMemoryStorage,
   createWorkspace,
@@ -37,6 +38,8 @@ export interface WorldOptions {
   /** Mean one-way latency in virtual ms (uniform 1..2*mean). */
   latencyMs?: number;
   seeded?: boolean;
+  /** Override the demo ruleset (field-masking scenarios). */
+  ruleset?: Ruleset;
 }
 
 interface Link {
@@ -72,7 +75,7 @@ export class World {
       workspaceId,
       schemaVersion: DEMO_SCHEMA_VERSION,
       minWritableVersion: MIN_WRITABLE_VERSION,
-      ruleset: DEMO_RULESET,
+      ruleset: opts.ruleset ?? DEMO_RULESET,
       migrateOp: (op) => op,
     };
     if (opts.seeded !== false) {
@@ -110,6 +113,7 @@ export class World {
     const link = this.links.get(effect.connId);
     if (link === undefined) return;
     if (effect.type === 'send') {
+      this.wiretap(link, effect.frame);
       // Encode/decode round-trip: the wire format is exercised on every hop.
       const text = encodeFrame(effect.frame);
       this.record('s->c', `${link.client.clientId} ${effect.frame.t}`);
@@ -127,6 +131,58 @@ export class World {
         if (!link.alive) return;
         this.severLink(link, false);
       });
+    }
+  }
+
+  /**
+   * Invariant (b), checked at send time on every outbound frame: no data
+   * may leave for a principal the ruleset does not permit it to. This is a
+   * deliberately independent re-derivation — it re-reads the live
+   * membership and re-runs `evaluate` itself rather than trusting the
+   * server's own filtering, so a bypass inside the sync path is caught here
+   * even when the server believes it did the right thing.
+   *
+   * Violations throw rather than accumulate: a leak is never a statistic.
+   */
+  private wiretap(link: Link, frame: ServerFrame): void {
+    if (frame.t !== 'ops' && frame.t !== 'snapshot') return;
+    const userId = link.client.userId;
+    const role = this.roleOf(userId);
+    const fail = (what: string): never => {
+      throw new Error(
+        `invariant (b) violated at t=${String(this.clock.now)}: ${what} sent to ${userId}` +
+          ` (role=${String(role)})`,
+      );
+    };
+    // A principal with no live membership must receive no data at all.
+    if (role === undefined) fail(`${frame.t} frame`);
+    const principal: Principal = { userId, role: role as NonNullable<typeof role> };
+
+    const check = (table: string, rowId: string, values: Record<string, unknown>, fields: string[]): void => {
+      const vis = evaluate(this.config.ruleset, principal, table, values as never);
+      if (!vis.read) fail(`row ${table}/${rowId}`);
+      if (vis.fieldMask === undefined) return;
+      const allowed = new Set(vis.fieldMask);
+      for (const field of fields) {
+        if (!allowed.has(field)) fail(`field ${table}/${rowId}.${field}`);
+      }
+    };
+
+    if (frame.t === 'snapshot') {
+      for (const row of frame.rows) {
+        check(row.table, row.rowId, rowValues(row), Object.keys(row.fields));
+      }
+      return;
+    }
+    for (const entry of frame.ops) {
+      const op = entry.op;
+      // Judge against the row as it stands on the server, which is the
+      // state the recipient would reconstruct from this op.
+      const current = this.storage.getRow(op.table, op.rowId);
+      const values = current === undefined ? {} : rowValues(current);
+      const fields =
+        op.kind === 'update' ? [op.field] : op.kind === 'create' ? Object.keys(op.fields) : [];
+      check(op.table, op.rowId, values, fields);
     }
   }
 

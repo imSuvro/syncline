@@ -19,7 +19,7 @@ import {
   type ServerFrame,
 } from '@syncline/protocol';
 import type { ServerStorage } from './adapter.js';
-import { permitEntryFor, permitRowFor } from './permit.js';
+import { permitEntryFor, permitRowFor, type Permitted } from './permit.js';
 
 export interface WorkspaceConfig {
   workspaceId: string;
@@ -195,7 +195,9 @@ const handleHello = (
   ];
 
   if (mode === 'snapshot') {
-    const rows: RowState[] = [];
+    // Branded element type: only permit.ts can produce these, so a raw row
+    // reaching a data frame is a type error, not a code-review question.
+    const rows: Permitted<RowState>[] = [];
     for (const row of storage.scanRows()) {
       const permitted = permitRowFor(config.ruleset, principal, row);
       if (permitted !== null) rows.push(permitted);
@@ -212,7 +214,7 @@ const handleHello = (
     do {
       const batch = storage.getOpsSince(from, OPS_BATCH);
       const last = batch.length > 0 ? (batch[batch.length - 1] as LogEntry).seq : head;
-      const visible: LogEntry[] = [];
+      const visible: Permitted<LogEntry>[] = [];
       for (const entry of batch) {
         const judgeRow = storage.getRow(entry.op.table, entry.op.rowId);
         const permitted = permitEntryFor(config.ruleset, principal, entry, judgeRow);
@@ -400,7 +402,7 @@ const broadcastEntries = (
     const role = membershipRoleOf(storage, conn.userId);
     if (role === undefined) continue; // just-revoked conns were removed already
     const principal: Principal = { userId: conn.userId, role };
-    const visible: LogEntry[] = [];
+    const visible: Permitted<LogEntry>[] = [];
     for (const entry of appended) {
       const judgeRow =
         entry.op.kind === 'delete'
