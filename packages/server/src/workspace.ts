@@ -162,6 +162,14 @@ const handleHello = (
       ? revokedAnswer(storage, connId, userId)
       : err(connId, 'AUTH_FAILED', 'not a member of this workspace');
   }
+  // A clientId is a device, and a device belongs to exactly one user. The
+  // token proves who you are; this stops you from claiming someone else's
+  // device id, whose dedup marks you would otherwise advance — silently
+  // destroying their pending writes.
+  const owner = storage.getClientOwner(clientId);
+  if (owner !== undefined && owner !== userId) {
+    return err(connId, 'AUTH_FAILED', 'client id belongs to another user');
+  }
   if (input.schemaVersion > config.schemaVersion) {
     return err(connId, 'VERSION_TOO_NEW', 'client schema is newer than the server');
   }
@@ -172,6 +180,13 @@ const handleHello = (
 
   const mode: 'incremental' | 'snapshot' =
     cursor !== undefined && cursor.epoch === epochState.epoch ? 'incremental' : 'snapshot';
+
+  // A new epoch starts a fresh op-id sequence for this client. Revocation
+  // clears marks server-side (ADR-004); without this, a device that was
+  // offline through a revoke/re-invite would replay op 58 against a mark of
+  // 0, trip OP_GAP, and reconnect-loop forever with an undrainable outbox.
+  // Both sides apply the same rule on the same signal, so they stay in step.
+  if (mode === 'snapshot') storage.setClientMark(clientId, 0);
 
   const conn: Conn = { userId, clientId, epochAtHello: epochState.epoch };
   state.conns.set(connId, conn);
@@ -272,14 +287,12 @@ const handlePush = (
   conn: Conn,
   frame: Extract<ClientFrame, { t: 'push' }>,
 ): ServerEffect[] => {
-  const role = membershipRoleOf(storage, conn.userId);
-  if (role === undefined) {
+  if (membershipRoleOf(storage, conn.userId) === undefined) {
     // Race: revoked between staleness check and here can't happen inside one
     // step, but a missing membership with an unchanged epoch is a bug guard.
     state.conns.delete(connId);
     return revokedAnswer(storage, connId, conn.userId);
   }
-  const principal: Principal = { userId: conn.userId, role };
 
   const results: PushResult[] = [];
   const appended: LogEntry[] = [];
@@ -311,6 +324,20 @@ const handlePush = (
         ? config.migrateOp(pushed.op, pushed.baseSchemaVersion)
         : pushed.op;
 
+    // Re-read the role for EVERY op: a batch can revoke or demote its own
+    // author part-way through (self-removal is allowed), and the remaining
+    // ops must be judged by what the author is now, not what they were when
+    // the batch arrived.
+    const role = membershipRoleOf(storage, conn.userId);
+    if (role === undefined) {
+      state.conns.delete(connId);
+      return [
+        { type: 'send', connId, frame: { t: 'pushAck', results } },
+        ...revokedAnswer(storage, connId, conn.userId),
+      ];
+    }
+    const principal: Principal = { userId: conn.userId, role };
+
     const existing = storage.getRow(op.table, op.rowId);
     const existingValues = existing !== undefined && existing.deleted === undefined ? rowValues(existing) : {};
     if (!canWrite(config.ruleset, principal, op, existingValues)) {
@@ -318,6 +345,18 @@ const handlePush = (
       mark = pushed.opId;
       storage.setClientMark(conn.clientId, mark);
       continue;
+    }
+    // One live membership per user. Two would make the effective role depend
+    // on storage scan order, which differs per adapter — a demotion applied
+    // to the "wrong" episode row would silently do nothing.
+    if (op.kind === 'create' && op.table === 'memberships') {
+      const target = op.fields['userId'];
+      if (typeof target === 'string' && membershipRoleOf(storage, target) !== undefined) {
+        results.push({ opId: pushed.opId, rejected: 'forbidden' });
+        mark = pushed.opId;
+        storage.setClientMark(conn.clientId, mark);
+        continue;
+      }
     }
 
     const seq = storage.appendOp(conn.clientId, pushed.opId, op);

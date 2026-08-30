@@ -47,16 +47,22 @@ export const verifyToken = async (
   const parts = token.split('.');
   if (parts.length !== 3) return null;
   const [header, payload, sig] = parts as [string, string, string];
-  const sigBytes = Uint8Array.from(b64urlDecode(sig), (c) => c.charCodeAt(0));
-  const ok = await crypto.subtle.verify(
-    'HMAC',
-    await hmacKey(secret),
-    sigBytes,
-    encoder.encode(`${header}.${payload}`),
-  );
-  if (!ok) return null;
+  // Everything that parses attacker-controlled text lives inside the try:
+  // atob throws on non-base64, and an escaping throw here would reset the
+  // Durable Object, dropping every other socket attached to it.
   try {
-    const claims = JSON.parse(b64urlDecode(payload)) as Partial<Claims>;
+    const sigBytes = Uint8Array.from(b64urlDecode(sig), (c) => c.charCodeAt(0));
+    const ok = await crypto.subtle.verify(
+      'HMAC',
+      await hmacKey(secret),
+      sigBytes,
+      encoder.encode(`${header}.${payload}`),
+    );
+    if (!ok) return null;
+    // Decode as UTF-8, matching the Node adapter exactly: a latin1 read
+    // would resolve a non-ASCII `sub` to a different principal per runtime.
+    const bytes = Uint8Array.from(b64urlDecode(payload), (c) => c.charCodeAt(0));
+    const claims = JSON.parse(new TextDecoder().decode(bytes)) as Partial<Claims>;
     if (typeof claims.sub !== 'string' || typeof claims.exp !== 'number') return null;
     if (claims.exp * 1000 < nowMs) return null;
     return claims as Claims;

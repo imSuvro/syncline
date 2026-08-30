@@ -18,10 +18,16 @@ import { SERVER_URL } from './api.js';
  * `?device=` overrides it, so two tabs in one profile can stand in for two
  * devices — incognito gets its own storage and needs no override.
  */
-const deviceId = (): string => {
+const deviceId = (userId: string): string => {
+  // Scoped per persona: the demo lets you switch users in one browser, and
+  // a shared device id would boot the next persona from the previous one's
+  // local store — cross-user data bleed in the app whose whole thesis is
+  // that this cannot happen. The server also rejects a clientId claimed by
+  // a different user, so a shared id would simply fail to connect.
   const override = new URLSearchParams(window.location.search).get('device');
-  if (override !== null && override !== '') return `device-${override}`;
-  const key = 'syncline.clientId';
+  const suffix = override !== null && override !== '' ? `device-${override}` : null;
+  if (suffix !== null) return `${userId}-${suffix}`;
+  const key = `syncline.clientId.${userId}`;
   let id = localStorage.getItem(key);
   if (id === null) {
     id = crypto.randomUUID();
@@ -42,7 +48,7 @@ export interface SyncSession {
   setSimulatedOffline(offline: boolean): void;
 }
 
-export const useSync = (token: string, workspaceId: string): SyncSession | null => {
+export const useSync = (token: string, userId: string, workspaceId: string): SyncSession | null => {
   const [client, setClient] = useState<SynclineClient | null>(null);
   // `version` counts engine notifications. It must appear in the memo deps
   // below — the setter is referentially stable, so depending on the setter
@@ -61,7 +67,7 @@ export const useSync = (token: string, workspaceId: string): SyncSession | null 
       serverUrl: SERVER_URL,
       token,
       workspaceId,
-      clientId: deviceId(),
+      clientId: deviceId(userId),
       schemaVersion: DEMO_SCHEMA_VERSION,
     });
     const offEvent = c.onEvent((event: ClientEvent) => {
@@ -78,7 +84,7 @@ export const useSync = (token: string, workspaceId: string): SyncSession | null 
       offEvent();
       offFeed();
     };
-  }, [token, workspaceId, tick]);
+  }, [token, userId, workspaceId, tick]);
 
   // Re-render whenever any table this session shows changes.
   useEffect(() => {

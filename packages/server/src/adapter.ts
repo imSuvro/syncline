@@ -21,8 +21,10 @@ export interface ServerStorage {
   /** Push-dedup high-water mark per clientId (0 when unseen). */
   getClientMark(clientId: string): number;
   setClientMark(clientId: string, opId: number): void;
-  /** Records which user a clientId belongs to (for revoke-time mark clears). */
+  /** Records which user a clientId belongs to (for revoke-time mark clears
+   * and for rejecting a clientId claimed by a different user). */
   setClientOwner(clientId: string, userId: string): void;
+  getClientOwner(clientId: string): string | undefined;
   /** Clears marks of every clientId owned by userId (ADR-004 step 2). */
   clearMarksForUser(userId: string): void;
 
