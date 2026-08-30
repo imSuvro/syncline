@@ -39,7 +39,9 @@ const TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 
 const CORS = {
   'access-control-allow-origin': '*',
-  'access-control-allow-headers': 'content-type',
+  // `authorization` must be listed or the browser's preflight rejects the
+  // token-bearing directory request.
+  'access-control-allow-headers': 'content-type, authorization',
   'access-control-allow-methods': 'GET, POST, OPTIONS',
 };
 

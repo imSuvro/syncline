@@ -25,7 +25,7 @@ a member in one browser and their local data vanishes in the other.
 | 13 | Demo app | Dev | done | v0.14 |
 | 14 | Testing | QA | done | v0.15 |
 | 15 | Review | QA/Dev | done | v0.16 |
-| 16 | Deploy | DevOps | pending | |
+| 16 | Deploy | DevOps | done | v0.17 |
 | 17 | Launch | Product Owner | pending | |
 
 Tag mapping (1b gets its own tag): stage 1→v0.1, 1b→v0.2, 2→v0.3, 3→v0.4,
@@ -295,6 +295,30 @@ Tag mapping (1b gets its own tag): stage 1→v0.1, 1b→v0.2, 2→v0.3, 3→v0.4
   were judged latent (they need a row-scoped read predicate no shipped
   ruleset uses) and are recorded in the review rather than patched blindly.
   83 tests, 1,000 fuzz seeds green after the changes.
+
+- **Stage 16 (deploy).** Both surfaces are live and free:
+  - Sync server: **https://syncline-server.weekendbuild.workers.dev**
+    (Cloudflare Worker + SQLite Durable Objects, JWT secret via
+    `wrangler secret put`).
+  - Demo: **https://syncline-suvros-projects.vercel.app** (Vercel project
+    linked to the repo, so `main` auto-deploys; the production sync URL is
+    committed in `apps/demo/.env.production` rather than configured in a
+    dashboard, so the build is reproducible from the repo alone).
+
+  **Verified on the live URLs, in two browser sessions:**
+  1. *Offline convergence.* Maya goes offline (`offline · 1 saved locally`),
+     edits an issue, reconnects; the ticker shows `▲ push op=1 status` then
+     `▼ seq=30`, and Priya's independent browser shows the same value.
+  2. *The revoke moment.* Priya revokes Maya; Maya's browser prints
+     `▼ seq=31 forget workspace=acme`, drops all 22 issues, and shows the
+     removal card. Checked at the storage layer, not just the screen: her
+     IndexedDB for that workspace holds a single `meta` key — **zero rows,
+     zero outbox entries** — while Priya's device still holds all 25 rows.
+
+  One deploy-only bug surfaced here and is fixed: CORS did not allow the
+  `authorization` header, so the browser's preflight blocked the
+  newly token-gated directory request even though the endpoint worked
+  under curl.
 
 ## NEEDS-HUMAN
 
