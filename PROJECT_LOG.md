@@ -15,7 +15,7 @@ a member in one browser and their local data vanishes in the other.
 | 3 | Feasibility spike | Architect | done | v0.4 |
 | 4 | UX | UX Designer | done | v0.5 |
 | 5 | Architecture (ADRs) | Architect | done | v0.6 |
-| 6 | Planning (backlog) | Product Owner | pending | |
+| 6 | Planning (backlog) | Product Owner | done | v0.7 |
 | 7 | Repo + CI | DevOps | pending | |
 | 8 | Server foundation | Dev | pending | |
 | 9 | Sync server | Dev | pending | |
