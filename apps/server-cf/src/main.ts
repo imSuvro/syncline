@@ -159,6 +159,32 @@ export class WorkspaceDO implements DurableObject {
     const storage = this.storage();
     const effects = storage.tx(() => workspaceStep(this.state, this.config, storage, input));
     for (const effect of effects) this.execute(effect);
+    // Directory propagation (C6): at-least-once, retried via alarm.
+    if (storage.peekDirectory(1).length > 0) void this.flushDirectory();
+  }
+
+  /** Drain the directory outbox to DirectoryDO; on failure, retry by alarm. */
+  private async flushDirectory(): Promise<void> {
+    const storage = this.storage();
+    const workspaceId = storage.getMeta('workspaceId') ?? '';
+    const pending = storage.peekDirectory(50);
+    if (pending.length === 0) return;
+    try {
+      const id = this.env.DIRECTORY_DO.idFromName('main');
+      const res = await this.env.DIRECTORY_DO.get(id).fetch('https://do/internal/membership', {
+        method: 'POST',
+        body: JSON.stringify({ workspaceId, changes: pending.map((p) => JSON.parse(p.change) as unknown) }),
+      });
+      if (!res.ok) throw new Error(`directory answered ${String(res.status)}`);
+      for (const p of pending) storage.ackDirectory(p.id);
+      if (storage.peekDirectory(1).length > 0) void this.flushDirectory();
+    } catch {
+      void this.ctx.storage.setAlarm(Date.now() + 30_000);
+    }
+  }
+
+  async alarm(): Promise<void> {
+    await this.flushDirectory();
   }
 
   private execute(effect: ServerEffect): void {
@@ -235,13 +261,28 @@ export class WorkspaceDO implements DurableObject {
 
 export class DirectoryDO implements DurableObject {
   private readonly env: Bindings;
+  private readonly ctx: DurableObjectState;
 
-  constructor(_ctx: DurableObjectState, env: Bindings) {
+  constructor(ctx: DurableObjectState, env: Bindings) {
     this.env = env;
+    this.ctx = ctx;
+    ctx.storage.sql.exec(
+      'CREATE TABLE IF NOT EXISTS members (workspaceId TEXT NOT NULL, userId TEXT NOT NULL, PRIMARY KEY (workspaceId, userId))',
+    );
+    // Seed the membership view once; workspace outboxes keep it live after.
+    const seeded = ctx.storage.sql.exec("SELECT COUNT(*) AS n FROM members").toArray()[0] as { n: number };
+    if (seeded.n === 0) {
+      for (const w of DEMO_WORKSPACES) {
+        for (const m of w.members) {
+          ctx.storage.sql.exec('INSERT OR IGNORE INTO members (workspaceId, userId) VALUES (?, ?)', w.workspaceId, m.userId);
+        }
+      }
+    }
   }
 
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
+    const sql = this.ctx.storage.sql;
     if (request.method === 'POST' && url.pathname === '/auth/login') {
       const body = (await request.json()) as { userId?: string };
       const user = DEMO_USERS.find((u) => u.userId === body.userId);
@@ -251,10 +292,28 @@ export class DirectoryDO implements DurableObject {
     }
     if (request.method === 'GET' && url.pathname === '/directory') {
       const userId = url.searchParams.get('userId') ?? '';
-      const list = DEMO_WORKSPACES.filter((w) => w.members.some((m) => m.userId === userId)).map(
-        (w) => ({ workspaceId: w.workspaceId, name: w.name }),
-      );
+      const rows = sql
+        .exec('SELECT workspaceId FROM members WHERE userId = ?', userId)
+        .toArray() as { workspaceId: string }[];
+      const list = rows
+        .map((r) => DEMO_WORKSPACES.find((w) => w.workspaceId === r.workspaceId))
+        .filter((w): w is (typeof DEMO_WORKSPACES)[number] => w !== undefined)
+        .map((w) => ({ workspaceId: w.workspaceId, name: w.name }));
       return json(200, { workspaces: list });
+    }
+    if (request.method === 'POST' && url.pathname === '/internal/membership') {
+      const body = (await request.json()) as {
+        workspaceId: string;
+        changes: { kind: string; userId: string }[];
+      };
+      for (const change of body.changes) {
+        if (change.kind === 'delete') {
+          sql.exec('DELETE FROM members WHERE workspaceId = ? AND userId = ?', body.workspaceId, change.userId);
+        } else {
+          sql.exec('INSERT OR IGNORE INTO members (workspaceId, userId) VALUES (?, ?)', body.workspaceId, change.userId);
+        }
+      }
+      return json(200, { ok: true });
     }
     return json(404, { error: 'not found' });
   }

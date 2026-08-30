@@ -84,6 +84,9 @@ importers:
       '@syncline/server':
         specifier: workspace:*
         version: link:../server
+      syncline-demo-schema:
+        specifier: workspace:*
+        version: link:../demo-schema
 
   packages/protocol: {}
 

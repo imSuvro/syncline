@@ -15,6 +15,7 @@
   "dependencies": {
     "@syncline/client": "workspace:*",
     "@syncline/protocol": "workspace:*",
-    "@syncline/server": "workspace:*"
+    "@syncline/server": "workspace:*",
+    "syncline-demo-schema": "workspace:*"
   }
 }
