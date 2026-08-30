@@ -1,0 +1,16 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "syncline-server",
+  "main": "src/main.ts",
+  "compatibility_date": "2026-08-01",
+  "durable_objects": {
+    "bindings": [
+      { "name": "WORKSPACE_DO", "class_name": "WorkspaceDO" },
+      { "name": "DIRECTORY_DO", "class_name": "DirectoryDO" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["WorkspaceDO", "DirectoryDO"] }
+  ],
+  "observability": { "enabled": true }
+}

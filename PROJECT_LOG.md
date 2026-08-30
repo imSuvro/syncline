@@ -17,7 +17,7 @@ a member in one browser and their local data vanishes in the other.
 | 5 | Architecture (ADRs) | Architect | done | v0.6 |
 | 6 | Planning (backlog) | Product Owner | done | v0.7 |
 | 7 | Repo + CI | DevOps | done | v0.8 |
-| 8 | Server foundation | Dev | pending | |
+| 8 | Server foundation | Dev | done | v0.9 |
 | 9 | Sync server | Dev | pending | |
 | 10 | Client engine | Dev | pending | |
 | 11 | Partial replication + permissions | Dev | pending | |
@@ -133,6 +133,24 @@ Tag mapping (1b gets its own tag): stage 1→v0.1, 1b→v0.2, 2→v0.3, 3→v0.4
   carve-out keeps IO but never clocks/randomness); attw esm-only pack checks
   green for both publishable packages; spike deleted per backlog. Stage
   branches merge via PR from here on.
+
+- **Stage 8 (server foundation).** `@syncline/protocol` is real: strict
+  frame codecs (malformed input → null, never throws), the permission
+  evaluator + `validateRuleset` (write⟹read), per-field LWW merge with
+  tombstone-wins — 19 unit tests. `@syncline/server`: the one adapter
+  interface, the branded-`Permitted` permit module, and a WorkspaceCore
+  covering hello (snapshot/incremental/AUTH_FAILED/BAD_CURSOR/VERSION_TOO_NEW),
+  idempotent push with gap detection and mark-advancing rejections,
+  broadcast with own-op echo through the permit path, presence, and the
+  full ADR-004 revocation choreography (forget → REVOKED close, mark
+  clears, epoch bumps, re-invite fresh-epoch snapshot, receive-time
+  staleness eviction) — 17 core tests. Node adapter live-smoked end-to-end
+  (login → snapshot(25 rows) → push → ack seq=26 → echo) over node:sqlite +
+  ws. Cloudflare adapter (DO SQLite storage, hibernation sockets,
+  DirectoryDO login) compiles under workers-types. ADR-008 (JWT HS256 at
+  edges) accepted. **Design ruling from a failing test**: membership rows
+  are keyed by minted per-episode rowIds — ADR-005's never-resurrect rule
+  would otherwise swallow re-invites; amended into ADR-004.
 
 ## NEEDS-HUMAN
 
