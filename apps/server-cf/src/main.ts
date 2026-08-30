@@ -80,21 +80,23 @@ export class WorkspaceDO implements DurableObject {
   private readonly ctx: DurableObjectState;
   private readonly env: Bindings;
   private readonly state: WorkspaceState;
-  private readonly config: WorkspaceConfig;
+  private config: WorkspaceConfig;
 
   constructor(ctx: DurableObjectState, env: Bindings) {
     this.ctx = ctx;
     this.env = env;
     this.state = createWorkspace();
-    const workspaceId = 'pending'; // real id learned on first fetch; seeds are id-agnostic here
+    initSchema(ctx.storage.sql);
+    // The DO is addressed by name, but the name is not readable from the
+    // object — so the id is persisted on first fetch and recovered here on
+    // every later wake (including after hibernation).
     this.config = {
-      workspaceId,
+      workspaceId: createDoStorage(ctx).getMeta('workspaceId') ?? '',
       schemaVersion: DEMO_SCHEMA_VERSION,
       minWritableVersion: MIN_WRITABLE_VERSION,
       ruleset: DEMO_RULESET,
       migrateOp,
     };
-    initSchema(ctx.storage.sql);
     // Rebuild connection registry from hibernation-surviving sockets.
     for (const ws of ctx.getWebSockets()) {
       const meta = ws.deserializeAttachment() as { conn?: string } | null;
@@ -108,10 +110,13 @@ export class WorkspaceDO implements DurableObject {
   private storage = () => createDoStorage(this.ctx);
 
   private seedIfNeeded(workspaceId: string): void {
+    if (this.config.workspaceId !== workspaceId) {
+      this.config = { ...this.config, workspaceId };
+    }
     const storage = this.storage();
     if (storage.getMeta('seeded') === '1') return;
     storage.tx(() => {
-      workspaceStep(this.state, { ...this.config, workspaceId }, storage, {
+      workspaceStep(this.state, this.config, storage, {
         type: 'seed',
         clientId: SEED_CLIENT_ID,
         ops: seedOps(workspaceId),
