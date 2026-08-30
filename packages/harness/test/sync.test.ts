@@ -41,11 +41,11 @@ describe('reconnect + backfill (C5)', () => {
     world.connect(maya);
     world.run();
 
-    maya.mutate(edit('acme-3', 'priority', 'high'));
+    maya.mutate(edit('acme-3', 'severity', 'high'));
     world.run();
     const headAfterFirst = world.storage.headSeq();
     // Simulate ack loss: put the op back in the outbox and re-push.
-    maya.outbox = [{ opId: 1, baseSchemaVersion: 1, op: edit('acme-3', 'priority', 'high') }];
+    maya.outbox = [{ opId: 1, baseSchemaVersion: 1, op: edit('acme-3', 'severity', 'high') }];
     maya.flush();
     world.run();
     expect(world.storage.headSeq()).toBe(headAfterFirst);
@@ -136,7 +136,7 @@ describe('determinism (C7 DoD)', () => {
     const rng = world.stream('workload');
     for (let i = 0; i < 30; i++) {
       const who = rng.chance(0.5) ? a : b;
-      who.mutate(edit(`acme-${String(1 + rng.int(10))}`, rng.pick(['status', 'title', 'priority']), `v${String(i)}`));
+      who.mutate(edit(`acme-${String(1 + rng.int(10))}`, rng.pick(['status', 'title', 'severity']), `v${String(i)}`));
       if (rng.chance(0.2)) {
         world.kill(who);
         world.run();

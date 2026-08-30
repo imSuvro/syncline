@@ -16,7 +16,7 @@ const MASKED: Ruleset = {
       write: {
         title: { kind: 'role', atLeast: 'editor' },
         status: { kind: 'role', atLeast: 'editor' },
-        priority: { kind: 'role', atLeast: 'editor' },
+        severity: { kind: 'role', atLeast: 'editor' },
         assignee: { kind: 'role', atLeast: 'editor' },
         estimate: { kind: 'role', atLeast: 'owner' },
       },
