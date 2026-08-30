@@ -75,11 +75,33 @@ const getWorkspace = (workspaceId: string): Workspace | undefined => {
   return created;
 };
 
+// --- Directory (C6): live membership view fed by the workspace outboxes ----
+// Initialized from seeds, updated whenever a workspace step enqueues a
+// membership change. In-process here; the CF adapter does the same via a
+// DirectoryDO round-trip with alarm retry.
+
+const directoryMembers = new Map<string, Set<string>>(
+  DEMO_WORKSPACES.map((w) => [w.workspaceId, new Set(w.members.map((m) => m.userId))]),
+);
+
+const drainDirectory = (workspaceId: string, storage: ServerStorage): void => {
+  for (const entry of storage.peekDirectory(100)) {
+    const change = JSON.parse(entry.change) as { kind: string; userId: string };
+    const members = directoryMembers.get(workspaceId);
+    if (members !== undefined) {
+      if (change.kind === 'delete') members.delete(change.userId);
+      else members.add(change.userId);
+    }
+    storage.ackDirectory(entry.id);
+  }
+};
+
 /** Run one core step inside a storage transaction, then flush effects —
  * commit-before-send, per the adapter contract (ADR-007). */
 const step = (ws: Workspace, input: ServerInput): void => {
   const effects = ws.storage.tx(() => workspaceStep(ws.state, ws.config, ws.storage, input));
   for (const effect of effects) executeEffect(ws, effect);
+  drainDirectory(ws.config.workspaceId, ws.storage);
 };
 
 const executeEffect = (ws: Workspace, effect: ServerEffect): void => {
@@ -143,11 +165,9 @@ const httpServer = createServer((req, res) => {
     }
     if (req.method === 'GET' && url.pathname === '/directory') {
       const userId = url.searchParams.get('userId') ?? '';
-      // Stage 8: static membership summaries from seeds. Stage 9 (C6) makes
-      // this live via the directory outbox.
-      const list = DEMO_WORKSPACES.filter((w) => w.members.some((m) => m.userId === userId)).map(
-        (w) => ({ workspaceId: w.workspaceId, name: w.name }),
-      );
+      const list = DEMO_WORKSPACES.filter((w) =>
+        directoryMembers.get(w.workspaceId)?.has(userId) === true,
+      ).map((w) => ({ workspaceId: w.workspaceId, name: w.name }));
       json(res, 200, { workspaces: list });
       return;
     }

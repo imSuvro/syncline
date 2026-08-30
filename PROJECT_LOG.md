@@ -18,7 +18,7 @@ a member in one browser and their local data vanishes in the other.
 | 6 | Planning (backlog) | Product Owner | done | v0.7 |
 | 7 | Repo + CI | DevOps | done | v0.8 |
 | 8 | Server foundation | Dev | done | v0.9 |
-| 9 | Sync server | Dev | pending | |
+| 9 | Sync server | Dev | done | v0.10 |
 | 10 | Client engine | Dev | pending | |
 | 11 | Partial replication + permissions | Dev | pending | |
 | 12 | Conflicts + migration | Dev | pending | |
@@ -151,6 +151,22 @@ Tag mapping (1b gets its own tag): stage 1→v0.1, 1b→v0.2, 2→v0.3, 3→v0.4
   edges) accepted. **Design ruling from a failing test**: membership rows
   are keyed by minted per-episode rowIds — ADR-005's never-resurrect rule
   would otherwise swallow re-invites; amended into ADR-004.
+
+- **Stage 9 (sync server).** Harness v1 is live: seeded splitmix32→
+  xoshiro128** with derived per-concern streams, virtual-time heap
+  scheduler, FIFO fake transport (a real bug found here: independent
+  per-frame delays reordered helloAck/snapshot and the determinism test
+  caught the convergence break — WebSocket ordering is now modeled
+  faithfully), a reference client as the protocol's second independent
+  implementation, and a structured trace with FNV-1a hashing. Six
+  end-to-end integration tests: reconnect cursor backfill, lost-ack
+  duplicate replay (server byte-identical), incremental≡snapshot
+  equivalence, revoke-mid-session + re-invite over the wire, join
+  mid-history, and same-seed→identical-trace/different-seed→different-trace.
+  Directory propagation (C6) is live in both adapters: node drains the
+  workspace outbox into an in-process membership view; Cloudflare flushes
+  WorkspaceDO→DirectoryDO with alarm retry, DirectoryDO keeps the dynamic
+  membership table in its own SQLite. 42 tests total.
 
 ## NEEDS-HUMAN
 
