@@ -20,7 +20,7 @@ a member in one browser and their local data vanishes in the other.
 | 8 | Server foundation | Dev | done | v0.9 |
 | 9 | Sync server | Dev | done | v0.10 |
 | 10 | Client engine | Dev | done | v0.11 |
-| 11 | Partial replication + permissions | Dev | pending | |
+| 11 | Partial replication + permissions | Dev | done | v0.12 |
 | 12 | Conflicts + migration | Dev | pending | |
 | 13 | Demo app | Dev | pending | |
 | 14 | Testing | QA | pending | |
@@ -183,6 +183,26 @@ Tag mapping (1b gets its own tag): stage 1→v0.1, 1b→v0.2, 2→v0.3, 3→v0.4
   loss path, fixed by resetting it on every `helloAck`; (2) the optimistic
   overlay dropped updates to rows absent from `base`, hiding an author's own
   offline edit after a purge — now the overlay synthesizes the row.
+
+- **Stage 11 (partial replication + permissions — the heart).** The
+  "bypass is a compile error" claim is now true rather than aspirational:
+  the arrays feeding `snapshot`/`ops` frames are declared `Permitted<T>[]`,
+  and only `permit.ts` can mint that brand, so an unfiltered row cannot
+  reach a data frame without failing the build. Three source-level guards
+  back it up (single minting site, branded payload declarations, evaluator
+  reachable only through permit). Field masking verified across both paths
+  — an owner-only field is absent from an editor's snapshot *and* from
+  live ops, is rejected on write from the role that cannot read it, and
+  leaves each principal converged to its own slice rather than a shared
+  one. Live narrowing (promote → demote) closes the connection with
+  EPOCH_CHANGED and re-syncs a genuinely narrower snapshot. **Invariant (b)
+  now has a wiretap**: every outbound data frame is independently
+  re-evaluated at send time against a freshly read membership, so a leak
+  inside the sync path is caught even when the server believes it filtered
+  correctly — proven by planting two deliberate bypasses (a snapshot built
+  with another principal's permissions, and a data frame to a revoked
+  user), both caught, while an honest revoke-and-reinvite run stays silent.
+  61 tests.
 
 ## NEEDS-HUMAN
 
