@@ -10,6 +10,13 @@ sync server at `syncline-server.weekendbuild.workers.dev` ·
 
 No signup. Pick a persona and start.
 
+![Priya revokes Maya's access; Maya's browser receives a forget instruction, her issues fade away, and a card confirms the device has purged the workspace](docs/media/revoke.gif)
+
+*Left: Priya revokes Maya. Right: Maya's browser receives `forget workspace=acme`
+on the wire, her issues dissolve, and the device confirms it purged the store,
+the outbox, and the cursor. Both panes are real sessions against the deployed
+sync server — recorded by [`scripts/record-revoke.mjs`](scripts/record-revoke.mjs).*
+
 ## Watch the thing it's for
 
 Open the demo twice — once normally, once in an incognito window (the landing

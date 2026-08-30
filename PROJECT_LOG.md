@@ -333,6 +333,21 @@ Tag mapping (1b gets its own tag): stage 1→v0.1, 1b→v0.2, 2→v0.3, 3→v0.4
   three-step demo script, the architecture diagram, and the honest
   limitations section. Packages remain attw-green.
 
+- **Post-launch (2026-08-30).** Recording the README GIF surfaced a gap
+  between spec and build: docs/ux.md calls for the issue rows to *dissolve*
+  top-to-bottom when a forget lands ("the visual of data leaving the
+  device"), and the implementation swapped straight to the removal card.
+  Implemented it — the client keeps the last populated list to animate out,
+  since the store is already purged by the time React re-renders, with a
+  staggered fade and an immediate swap under `prefers-reduced-motion`.
+  `docs/media/revoke.gif` records the result: two isolated browser contexts
+  against the deployed sync server, composited side by side, showing
+  Priya's revoke, `▼ seq=37 forget workspace=acme` arriving on Maya's
+  ticker, her rows fading, and the purge confirmation. The recorder is
+  committed as `scripts/record-revoke.mjs` (with its own install
+  instructions — deliberately not a workspace package, since Playwright is
+  heavy and only needed to regenerate one image).
+
 ## NEEDS-HUMAN
 
 - **npm publish auth** (the only outstanding item; nothing else is blocked).
