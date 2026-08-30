@@ -8,7 +8,9 @@
     "typecheck": "tsc -b && tsc -p apps/server-cf && tsc -p apps/demo",
     "lint": "eslint .",
     "test": "vitest run",
-    "pack-check": "attw --pack packages/protocol --profile esm-only && attw --pack packages/client --profile esm-only"
+    "pack-check": "attw --pack packages/protocol --profile esm-only && attw --pack packages/client --profile esm-only",
+    "fuzz": "tsx packages/harness/src/cli/fuzz.ts",
+    "dev:server": "node --experimental-sqlite --import tsx packages/server-node/src/main.ts"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.2",

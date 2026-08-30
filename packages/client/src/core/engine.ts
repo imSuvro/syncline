@@ -206,7 +206,17 @@ const handleFrame = (state: ClientState, frame: ServerFrame): ClientEffect[] => 
         }
         touched.add(entry.op.table);
       }
-      state.cursor = { seq: frame.advanceTo, epoch: frame.epoch };
+      // Cursors advance monotonically within an epoch. Frames are ordered
+      // within a connection, but a frame still in flight from a previous
+      // socket must never rewind us — that would strand every op between
+      // the stale mark and where we already are.
+      state.cursor = {
+        seq:
+          state.cursor !== null && state.cursor.epoch === frame.epoch
+            ? Math.max(state.cursor.seq, frame.advanceTo)
+            : frame.advanceTo,
+        epoch: frame.epoch,
+      };
       records.push(metaRecord(state));
       return [
         { type: 'storageWrite', records },
