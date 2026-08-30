@@ -16,7 +16,7 @@ a member in one browser and their local data vanishes in the other.
 | 4 | UX | UX Designer | done | v0.5 |
 | 5 | Architecture (ADRs) | Architect | done | v0.6 |
 | 6 | Planning (backlog) | Product Owner | done | v0.7 |
-| 7 | Repo + CI | DevOps | pending | |
+| 7 | Repo + CI | DevOps | done | v0.8 |
 | 8 | Server foundation | Dev | pending | |
 | 9 | Sync server | Dev | pending | |
 | 10 | Client engine | Dev | pending | |
@@ -124,6 +124,15 @@ Tag mapping (1b gets its own tag): stage 1→v0.1, 1b→v0.2, 2→v0.3, 3→v0.4
   contract contradictions, incl. the forget-vs-gap-rule clash, the missing
   live-epoch-change mechanism, and the unspecified invite propagation) —
   all resolved with canonical rulings before ratification.
+
+- **Stage 7 (repo + CI).** Public repo `github.com/imSuvro/syncline`; main
+  protected (required contexts lint/typecheck/test/pack, no reviews — solo,
+  force-push disabled, admins not enforced as the emergency hatch); 8
+  workspaces scaffolded with strict TS project references; determinism lint
+  ban live (protocol, client/core, server, harness, demo-schema; CLI
+  carve-out keeps IO but never clocks/randomness); attw esm-only pack checks
+  green for both publishable packages; spike deleted per backlog. Stage
+  branches merge via PR from here on.
 
 ## NEEDS-HUMAN
 
