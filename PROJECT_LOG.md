@@ -19,7 +19,7 @@ a member in one browser and their local data vanishes in the other.
 | 7 | Repo + CI | DevOps | done | v0.8 |
 | 8 | Server foundation | Dev | done | v0.9 |
 | 9 | Sync server | Dev | done | v0.10 |
-| 10 | Client engine | Dev | pending | |
+| 10 | Client engine | Dev | done | v0.11 |
 | 11 | Partial replication + permissions | Dev | pending | |
 | 12 | Conflicts + migration | Dev | pending | |
 | 13 | Demo app | Dev | pending | |
@@ -167,6 +167,22 @@ Tag mapping (1b gets its own tag): stage 1→v0.1, 1b→v0.2, 2→v0.3, 3→v0.4
   workspace outbox into an in-process membership view; Cloudflare flushes
   WorkspaceDO→DirectoryDO with alarm retry, DirectoryDO keeps the dynamic
   membership table in its own SQLite. 42 tests total.
+
+- **Stage 10 (client engine).** `@syncline/client` core is complete and
+  sans-IO: durable outbox with the write-barrier-before-send contract
+  (asserted by effect ordering, not by convention), optimistic base+overlay
+  view, two-channel retirement (ack results + own-op echo), cursor
+  catch-up, transactional forget, EPOCH_CHANGED→snapshot re-entry, ping
+  liveness and exponential reconnect backoff. Browser adapters written:
+  IndexedDB storage (one atomic transaction per batch — its completion IS
+  the durability point), WebSocket transport, and a runtime that serializes
+  steps and awaits barriers before releasing sends. Nine core tests using a
+  crash-simulating fake store. **Two real bugs found by those tests**:
+  (1) `lastSentOpId` survived across sessions, so a reconnect that took the
+  snapshot path silently failed to replay the outbox — an acknowledged-write
+  loss path, fixed by resetting it on every `helloAck`; (2) the optimistic
+  overlay dropped updates to rows absent from `base`, hiding an author's own
+  offline edit after a purge — now the overlay synthesizes the row.
 
 ## NEEDS-HUMAN
 
