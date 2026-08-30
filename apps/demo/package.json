@@ -1,0 +1,12 @@
+{
+  "name": "syncline-demo",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Team issue tracker demo on @syncline/client — the app that makes partial replication and revocation visible",
+  "type": "module",
+  "dependencies": {
+    "@syncline/client": "workspace:*",
+    "@syncline/protocol": "workspace:*",
+    "syncline-demo-schema": "workspace:*"
+  }
+}

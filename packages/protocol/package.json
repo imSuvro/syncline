@@ -1,0 +1,18 @@
+{
+  "name": "@syncline/protocol",
+  "version": "0.1.0",
+  "description": "Wire protocol for permission-aware partial sync: frame types, codecs, the permission evaluator, and per-field LWW merge — pure functions, zero IO, zero dependencies",
+  "keywords": ["sync", "local-first", "offline-first", "permissions", "partial-replication", "protocol"],
+  "author": "Suvra Samajder",
+  "license": "MIT",
+  "repository": { "type": "git", "url": "git+https://github.com/imSuvro/syncline.git", "directory": "packages/protocol" },
+  "homepage": "https://github.com/imSuvro/syncline#readme",
+  "type": "module",
+  "sideEffects": false,
+  "files": ["dist"],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" }
+  }
+}

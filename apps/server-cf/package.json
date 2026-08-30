@@ -1,0 +1,12 @@
+{
+  "name": "syncline-server-cf",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Cloudflare adapter: Worker router + WorkspaceDO + DirectoryDO on DO SQLite with WebSocket Hibernation",
+  "type": "module",
+  "dependencies": {
+    "@syncline/protocol": "workspace:*",
+    "@syncline/server": "workspace:*",
+    "syncline-demo-schema": "workspace:*"
+  }
+}
