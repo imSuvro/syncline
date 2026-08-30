@@ -1,12 +1,17 @@
 // The demo issue tracker (docs/ux.md, docs/design/mockups.html). Its job is
 // to make the engine visible: the connection pill, the pending badge, the
 // presence dots, the sync ticker, and above all the revoke moment.
-import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import type { Op } from '@syncline/protocol';
 import type { ViewRow } from '@syncline/client';
 import { DEMO_USERS, DEMO_WORKSPACES } from 'syncline-demo-schema';
 import { fetchDirectory, login, type DemoUser, type WorkspaceSummary } from './api.js';
 import { useFlash, useSync } from './useSync.js';
+
+// The forget cascade (docs/ux.md): rows fade top-to-bottom, then the
+// removal card takes their place.
+const DISSOLVE_STAGGER_MS = 55;
+const DISSOLVE_TOTAL_MS = 950;
 
 const STATUSES = ['todo', 'in_progress', 'in_review', 'done'] as const;
 const SEVERITIES = ['low', 'medium', 'high'] as const;
@@ -159,10 +164,27 @@ const Workspace = ({
   const myRole = members.find((m) => m.values['userId'] === session.user.userId)?.values['role'];
   const canEdit = myRole === 'owner' || myRole === 'editor';
   const isOwner = myRole === 'owner';
+  const removed = sync?.removed === true;
 
   // Deliberately NOT auto-navigating on removal: the whole point of this
   // app is that you get to watch your data leave. The sidebar refreshes
   // when the reader dismisses the card.
+
+  // The forget purges the store before React renders again, so keep the
+  // last populated list around to animate out — otherwise the rows would
+  // simply blink out of existence and the reader would learn nothing.
+  const lastIssues = useRef<ViewRow[]>([]);
+  if (!removed && issues.length > 0) lastIssues.current = issues;
+  const [dissolving, setDissolving] = useState(false);
+  useEffect(() => {
+    if (!removed) return;
+    const instant =
+      typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (instant || lastIssues.current.length === 0) return;
+    setDissolving(true);
+    const timer = setTimeout(() => { setDissolving(false); }, DISSOLVE_TOTAL_MS);
+    return () => { clearTimeout(timer); };
+  }, [removed]);
 
   if (activeWs === null) {
     return (
@@ -259,11 +281,15 @@ const Workspace = ({
           />
         </div>
 
-        {sync?.removed === true ? (
-          <RemovedCard
-            workspaceName={workspaces.find((w) => w.workspaceId === activeWs)?.name ?? activeWs}
-            onBack={onDirectoryChange}
-          />
+        {removed ? (
+          dissolving ? (
+            <IssueList issues={lastIssues.current} canEdit={false} onMutate={mutate} dissolving />
+          ) : (
+            <RemovedCard
+              workspaceName={workspaces.find((w) => w.workspaceId === activeWs)?.name ?? activeWs}
+              onBack={onDirectoryChange}
+            />
+          )
         ) : (
           <>
             {(sync?.phase === 'offline' || offline) && (
@@ -336,10 +362,13 @@ const IssueList = ({
   issues,
   canEdit,
   onMutate,
+  dissolving = false,
 }: {
   issues: ViewRow[];
   canEdit: boolean;
   onMutate: (op: Op) => void;
+  /** Playing the forget cascade: rows fade out top-to-bottom. */
+  dissolving?: boolean;
 }): ReactElement => {
   const [isFlashing, flash] = useFlash();
   const seen = useMemo(() => new Map<string, string>(), []);
@@ -373,8 +402,14 @@ const IssueList = ({
           <div className="group-label">
             {STATUS_LABEL[status]?.toUpperCase()} · {rows.length}
           </div>
-          {rows.map((issue) => (
-            <div key={issue.rowId} className={`issue${issue.pending ? ' pending' : ''}`}>
+          {rows.map((issue, rowIndex) => (
+            <div
+              key={issue.rowId}
+              className={`issue${issue.pending ? ' pending' : ''}${dissolving ? ' dissolving' : ''}`}
+              {...(dissolving
+                ? { style: { animationDelay: `${String(Math.min(rowIndex, 8) * DISSOLVE_STAGGER_MS)}ms` } }
+                : {})}
+            >
               <span className="id mono">{issue.rowId.slice(-6)}</span>
               <input
                 className="title"

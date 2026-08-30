@@ -179,8 +179,10 @@ button:focus-visible, select:focus-visible, input:focus-visible, a:focus-visible
 .ticker .idle { color: #4b5563; }
 
 /* ---------- revoke states ---------- */
-.dissolve { animation: dissolve .4s ease forwards; }
-@keyframes dissolve { to { opacity: 0; transform: translateY(-4px); } }
+.issue.dissolving { animation: dissolve .45s ease forwards; }
+@keyframes dissolve {
+  to { opacity: 0; transform: translateY(-6px) scale(.985); }
+}
 .removed-card {
   background: var(--card); border: 1px solid var(--line); border-left: 3px solid var(--forget);
   border-radius: 10px; padding: 28px; text-align: center; margin-top: 40px;
