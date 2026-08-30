@@ -17,6 +17,11 @@
   "dependencies": {
     "@syncline/protocol": "workspace:*",
     "@syncline/server": "workspace:*",
-    "syncline-demo-schema": "workspace:*"
+    "syncline-demo-schema": "workspace:*",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.5.13",
+    "tsx": "^4.20.4"
   }
 }

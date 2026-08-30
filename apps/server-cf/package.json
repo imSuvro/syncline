@@ -8,5 +8,9 @@
     "@syncline/protocol": "workspace:*",
     "@syncline/server": "workspace:*",
     "syncline-demo-schema": "workspace:*"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250830.0",
+    "wrangler": "^4.40.0"
   }
 }

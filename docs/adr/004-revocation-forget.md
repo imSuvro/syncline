@@ -106,6 +106,16 @@ send).
   outbox") that an empty snapshot does not — an empty snapshot must not
   imply dropping unsent local writes, but revocation must.
 
+## Amendment (2026-08-30, stage-8 implementation ruling)
+
+Membership rows are keyed by **minted per-episode rowIds** (`userId` is a
+field), not by userId: ADR-005's "rowIds never resurrect" rule would
+otherwise make re-invite impossible (the revoke tombstone would swallow the
+re-invite create — caught by the stage-8 test suite). Revoke tombstones one
+membership episode; re-invite mints a fresh row. The server finds a user's
+live role by scanning `memberships` for their non-deleted row; the `self`
+predicate (ADR-003) reads the `userId` field, unaffected.
+
 ## Consequences
 
 - Invariant (b) becomes checkable at two levels: no **data frame**
