@@ -41,6 +41,10 @@ export interface WorldOptions {
   seeded?: boolean;
   /** Override the demo ruleset (field-masking scenarios). */
   ruleset?: Ruleset;
+  /** Probability that a delivered frame is delivered twice. WebSockets do
+   * not duplicate, but reconnect races and at-least-once retries do — this
+   * keeps idempotency honest. */
+  duplicateRate?: number;
 }
 
 interface Link {
@@ -61,6 +65,7 @@ export class World {
   private readonly root: ReturnType<typeof createRoot>;
   private readonly netRng: Rng;
   private readonly latencyMs: number;
+  private readonly duplicateRate: number;
   private readonly links = new Map<string, Link>();
   private readonly trace: string[] = [];
   private connSeq = 0;
@@ -69,6 +74,7 @@ export class World {
     this.root = createRoot(opts.seed);
     this.netRng = this.root.stream('network');
     this.latencyMs = opts.latencyMs ?? 5;
+    this.duplicateRate = opts.duplicateRate ?? 0;
     this.storage = createMemoryStorage();
     this.serverState = createWorkspace();
     const workspaceId = opts.workspaceId ?? 'acme';
@@ -118,13 +124,16 @@ export class World {
       // Encode/decode round-trip: the wire format is exercised on every hop.
       const text = encodeFrame(effect.frame);
       this.record('s->c', `${link.client.clientId} ${effect.frame.t}`);
-      link.toClientAt = Math.max(link.toClientAt, this.clock.now + this.delay());
-      this.clock.schedule(link.toClientAt - this.clock.now, () => {
-        if (!link.alive) return;
-        const frame = decodeServerFrame(text);
-        if (frame === null) throw new Error('server sent malformed frame');
-        link.client.onFrame(frame);
-      });
+      const deliveries = this.duplicateRate > 0 && this.netRng.chance(this.duplicateRate) ? 2 : 1;
+      for (let i = 0; i < deliveries; i++) {
+        link.toClientAt = Math.max(link.toClientAt, this.clock.now + this.delay());
+        this.clock.schedule(link.toClientAt - this.clock.now, () => {
+          if (!link.alive) return;
+          const frame = decodeServerFrame(text);
+          if (frame === null) throw new Error('server sent malformed frame');
+          link.client.onFrame(frame);
+        });
+      }
     } else {
       this.record('close', `${link.client.clientId}`);
       link.toClientAt = Math.max(link.toClientAt, this.clock.now + this.delay());

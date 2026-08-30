@@ -9,3 +9,5 @@ coverage/
 .wrangler/
 *.local
 .DS_Store
+
+fuzz-failures/

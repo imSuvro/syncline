@@ -23,7 +23,7 @@ a member in one browser and their local data vanishes in the other.
 | 11 | Partial replication + permissions | Dev | done | v0.12 |
 | 12 | Conflicts + migration | Dev | done | v0.13 |
 | 13 | Demo app | Dev | done | v0.14 |
-| 14 | Testing | QA | pending | |
+| 14 | Testing | QA | done | v0.15 |
 | 15 | Review | QA/Dev | pending | |
 | 16 | Deploy | DevOps | pending | |
 | 17 | Launch | Product Owner | pending | |
@@ -245,6 +245,26 @@ Tag mapping (1b gets its own tag): stage 1→v0.1, 1b→v0.2, 2→v0.3, 3→v0.4
   the client forever (now caught and surfaced); and storage batches raced
   instead of queueing, so a snapshot's clearAll could overtake the rows
   written after it.
+
+- **Stage 14 (testing — the centerpiece).** The randomized interleaving
+  campaign is live: N clients on virtual time with seeded per-concern RNG
+  streams, going offline and back, editing concurrently, being revoked and
+  re-invited mid-sync, with duplicate frame delivery — checking all three
+  invariants throughout: (a) every permitted client converges to its own
+  permitted slice, (b) the send-time wiretap plus a quiescent residue scan,
+  (c) an explicit ledger of every acked write, each of which must be
+  present or provably superseded in final server state. `pnpm fuzz`
+  reproduces any seed exactly. **It immediately earned its keep**: seeds 66
+  and 377 failed on invariant (a), and triage found a genuine engine bug —
+  a frame still in flight from a previous socket rewound the cursor,
+  because `advanceTo` was assigned unconditionally, stranding every op
+  between the stale mark and the client's true position. Cursors are now
+  monotonic within an epoch in both the engine and the reference client
+  (docs/bugs.md #8). After the fix: **1,000 seeds at 80 steps, all green,
+  in 22 seconds.** CI gains `fuzz-smoke` (300 seeds per PR, failure
+  artifacts uploaded) as a fifth required context, plus a nightly workflow
+  running a rolling 5,000 seeds across three shapes (broad, churn,
+  crowded). 78 tests.
 
 ## NEEDS-HUMAN
 

@@ -58,3 +58,23 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: pnpm pack-check
+
+  # The randomized interleaving harness: 300 seeds on every PR, asserting
+  # (a) permitted clients converge, (b) no client holds forbidden data, and
+  # (c) no acknowledged write is lost. The nightly workflow runs 5,000.
+  fuzz-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm fuzz --from 0 --to 300 --steps 80
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-failures-smoke
+          path: fuzz-failures/

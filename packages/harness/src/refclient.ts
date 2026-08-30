@@ -32,6 +32,9 @@ export class RefClient {
   schemaVersion: number;
   /** Set when the server announced a newer schema than this client speaks. */
   serverSchemaVersion: number | undefined;
+  /** Every op the server acknowledged with a seq — invariant (c)'s ledger.
+   * A write in here MUST be reflected in the final server state. */
+  readonly acked: { opId: number; seq: number; op: Op }[] = [];
   private io: RefClientIo | undefined;
 
   constructor(userId: string, clientId: string, schemaVersion = 2) {
@@ -110,7 +113,15 @@ export class RefClient {
           const next = applyEntry(this.base.get(key), entry);
           if (next !== undefined) this.base.set(key, next);
         }
-        this.cursor = { seq: frame.advanceTo, epoch: frame.epoch };
+        // Monotonic within an epoch: a late frame from a previous socket
+        // must not rewind the cursor (see engine.ts for the same rule).
+        this.cursor = {
+          seq:
+            this.cursor !== undefined && this.cursor.epoch === frame.epoch
+              ? Math.max(this.cursor.seq, frame.advanceTo)
+              : frame.advanceTo,
+          epoch: frame.epoch,
+        };
         break;
       }
       case 'pushAck': {
@@ -118,6 +129,10 @@ export class RefClient {
         for (const result of frame.results) {
           done.add(result.opId);
           if ('rejected' in result) this.rejected.push(result.opId);
+          if ('seq' in result) {
+            const sent = this.outbox.find((p) => p.opId === result.opId);
+            if (sent !== undefined) this.acked.push({ opId: result.opId, seq: result.seq, op: sent.op });
+          }
         }
         this.outbox = this.outbox.filter((p) => !done.has(p.opId));
         break;

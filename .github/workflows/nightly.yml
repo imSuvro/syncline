@@ -1,0 +1,39 @@
+name: nightly
+
+# The deep tier of the interleaving campaign. Runs a rolling 5,000 seeds
+# across three shapes — the PR tier is a fast subset of the same harness.
+# Failing seeds are uploaded as artifacts and reproduce exactly with
+# `pnpm fuzz --seed <n>`.
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+jobs:
+  fuzz-nightly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: broad
+            args: --from 0 --to 3000 --steps 80 --clients 3 --dup 0.05
+          - name: churn
+            args: --from 3000 --to 4500 --steps 140 --clients 3 --dup 0.15
+          - name: crowded
+            args: --from 4500 --to 5000 --steps 120 --clients 4 --dup 0.1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm fuzz ${{ matrix.args }}
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-failures-${{ matrix.name }}
+          path: fuzz-failures/
