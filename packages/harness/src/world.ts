@@ -26,6 +26,7 @@ import {
   DEMO_SCHEMA_VERSION,
   MIN_WRITABLE_VERSION,
   SEED_CLIENT_ID,
+  migrateOp,
   seedOps,
 } from 'syncline-demo-schema';
 import { createRoot, fnv1a, type Rng } from './prng.js';
@@ -76,7 +77,7 @@ export class World {
       schemaVersion: DEMO_SCHEMA_VERSION,
       minWritableVersion: MIN_WRITABLE_VERSION,
       ruleset: opts.ruleset ?? DEMO_RULESET,
-      migrateOp: (op) => op,
+      migrateOp,
     };
     if (opts.seeded !== false) {
       this.serverInput({ type: 'seed', clientId: SEED_CLIENT_ID, ops: seedOps(workspaceId), now: 0 });

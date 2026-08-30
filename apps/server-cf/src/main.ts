@@ -23,6 +23,7 @@ import {
   DEMO_WORKSPACES,
   MIN_WRITABLE_VERSION,
   SEED_CLIENT_ID,
+  migrateOp,
   seedOps,
 } from 'syncline-demo-schema';
 import { createDoStorage, initSchema } from './storage.js';
@@ -91,7 +92,7 @@ export class WorkspaceDO implements DurableObject {
       schemaVersion: DEMO_SCHEMA_VERSION,
       minWritableVersion: MIN_WRITABLE_VERSION,
       ruleset: DEMO_RULESET,
-      migrateOp: (op) => op,
+      migrateOp,
     };
     initSchema(ctx.storage.sql);
     // Rebuild connection registry from hibernation-surviving sockets.

@@ -1,9 +1,16 @@
 // syncline-demo-schema — the issue tracker's tables, permission ruleset,
 // schema version, and seed data (backlog B4; ruleset per ADR-003; cast and
 // data per docs/ux.md). Stage 12 adds v2 + the migrator chain (F2).
-import type { FieldValue, Op, Ruleset } from '@syncline/protocol';
+import type { FieldValue, Op, RowState, Ruleset } from '@syncline/protocol';
 
-export const DEMO_SCHEMA_VERSION = 1;
+/**
+ * Schema versions (ADR-006). v2 renames `issues.priority` to
+ * `issues.severity` and normalizes its middle value (`med` → `medium`) —
+ * a deliberately real migration: it changes a field name, so op payloads
+ * written by a v1 client cannot be applied as-is and must be rewritten.
+ * The server accepts ops in [MIN_WRITABLE_VERSION, DEMO_SCHEMA_VERSION].
+ */
+export const DEMO_SCHEMA_VERSION = 2;
 export const MIN_WRITABLE_VERSION = 1;
 
 /**
@@ -14,6 +21,58 @@ export const MIN_WRITABLE_VERSION = 1;
  *   Membership rows ARE the entitlement data: the server's sync path reacts
  *   to ops on this table (epoch bumps, forget) per ADR-004.
  */
+// --- Migration chain (ADR-006) ---------------------------------------------
+// Both migrators are TOTAL: every input maps to a valid output. Dropping an
+// op is not expressible — the return type is `Op`, not `Op | null` — which
+// is what makes "no acknowledged write is ever lost across a migration" a
+// property of the types rather than a promise in a comment.
+
+const V1_TO_V2_SEVERITY: Record<string, FieldValue> = {
+  low: 'low',
+  med: 'medium',
+  high: 'high',
+};
+
+const severityValue = (v: FieldValue): FieldValue =>
+  typeof v === 'string' ? (V1_TO_V2_SEVERITY[v] ?? v) : v;
+
+const v1ToV2Op = (op: Op): Op => {
+  if (op.table !== 'issues') return op;
+  switch (op.kind) {
+    case 'create': {
+      const { priority, ...rest } = op.fields;
+      return priority === undefined
+        ? op
+        : { ...op, fields: { ...rest, severity: severityValue(priority) } };
+    }
+    case 'update':
+      return op.field === 'priority'
+        ? { ...op, field: 'severity', value: severityValue(op.value) }
+        : op;
+    case 'delete':
+      return op;
+  }
+};
+
+/** Migrate one op payload up to the current version. Identity — the
+ * (clientId, opId) pair — is never touched (ADR-002/006). */
+export const migrateOp = (op: Op, fromVersion: number): Op =>
+  fromVersion < 2 ? v1ToV2Op(op) : op;
+
+/** Migrate locally stored rows up to the current version (client side). */
+export const migrateRows = (rows: RowState[], fromVersion: number): RowState[] => {
+  if (fromVersion >= 2) return rows;
+  return rows.map((row) => {
+    if (row.table !== 'issues') return row;
+    const { priority, ...rest } = row.fields;
+    if (priority === undefined) return row;
+    return {
+      ...row,
+      fields: { ...rest, severity: { v: severityValue(priority.v), seq: priority.seq } },
+    };
+  });
+};
+
 export const DEMO_RULESET: Ruleset = {
   version: DEMO_SCHEMA_VERSION,
   tables: {
@@ -86,13 +145,15 @@ const issue = (
   n: number,
   title: string,
   status: FieldValue,
-  priority: FieldValue,
+  severity: FieldValue,
   assignee: FieldValue,
 ): Op => ({
   kind: 'create',
   table: 'issues',
   rowId: `${workspaceId}-${String(n)}`,
-  fields: { title, status, priority, assignee },
+  // Seeds are written at the current version (v2): `severity`, not the v1
+  // `priority`. A v1 client's ops are migrated on arrival.
+  fields: { title, status, severity: severityValue(severity), assignee },
 });
 
 // Membership rows are keyed by a minted per-episode rowId, NOT by userId:

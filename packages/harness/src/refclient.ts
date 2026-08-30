@@ -28,11 +28,37 @@ export class RefClient {
   forgotten = false;
   rejected: number[] = [];
   connected = false;
+  /** The schema version this client's *code* speaks (ADR-006). */
+  schemaVersion: number;
+  /** Set when the server announced a newer schema than this client speaks. */
+  serverSchemaVersion: number | undefined;
   private io: RefClientIo | undefined;
 
-  constructor(userId: string, clientId: string) {
+  constructor(userId: string, clientId: string, schemaVersion = 2) {
     this.userId = userId;
     this.clientId = clientId;
+    this.schemaVersion = schemaVersion;
+  }
+
+  /**
+   * The upgrade barrier (ADR-006): migrate local rows AND every queued op,
+   * then resume. Identities are preserved, so replayed ops dedup normally
+   * against the server's marks. Runs before any push at the new version.
+   */
+  upgrade(
+    toVersion: number,
+    migrateRows: (rows: RowState[], from: number) => RowState[],
+    migrateOp: (op: Op, from: number) => Op,
+  ): void {
+    const from = this.schemaVersion;
+    const migrated = migrateRows([...this.base.values()], from);
+    this.base = new Map(migrated.map((r) => [`${r.table}/${r.rowId}`, r]));
+    this.outbox = this.outbox.map((p) => ({
+      opId: p.opId, // identity never changes
+      baseSchemaVersion: toVersion,
+      op: migrateOp(p.op, from),
+    }));
+    this.schemaVersion = toVersion;
   }
 
   /** Wire up a live connection and say hello (with the cursor if any). */
@@ -43,7 +69,7 @@ export class RefClient {
       t: 'hello',
       token: this.userId, // world edge treats token as userId (auth tested at adapters)
       clientId: this.clientId,
-      schemaVersion: 1,
+      schemaVersion: this.schemaVersion,
       ...(this.cursor !== undefined ? { cursor: this.cursor } : {}),
     });
   }
@@ -54,7 +80,7 @@ export class RefClient {
   }
 
   mutate(op: Op): void {
-    this.outbox.push({ opId: this.nextOpId++, baseSchemaVersion: 1, op });
+    this.outbox.push({ opId: this.nextOpId++, baseSchemaVersion: this.schemaVersion, op });
     this.flush();
   }
 
@@ -68,6 +94,7 @@ export class RefClient {
     switch (frame.t) {
       case 'helloAck':
         this.epoch = frame.epoch;
+        this.serverSchemaVersion = frame.serverSchemaVersion;
         if (frame.mode === 'snapshot') this.base.clear();
         this.flush(); // replay pending ops once the session is up
         break;

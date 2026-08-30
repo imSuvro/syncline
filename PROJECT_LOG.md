@@ -21,7 +21,7 @@ a member in one browser and their local data vanishes in the other.
 | 9 | Sync server | Dev | done | v0.10 |
 | 10 | Client engine | Dev | done | v0.11 |
 | 11 | Partial replication + permissions | Dev | done | v0.12 |
-| 12 | Conflicts + migration | Dev | pending | |
+| 12 | Conflicts + migration | Dev | done | v0.13 |
 | 13 | Demo app | Dev | pending | |
 | 14 | Testing | QA | pending | |
 | 15 | Review | QA/Dev | pending | |
@@ -203,6 +203,26 @@ Tag mapping (1b gets its own tag): stage 1→v0.1, 1b→v0.2, 2→v0.3, 3→v0.4
   with another principal's permissions, and a data frame to a revoked
   user), both caught, while an honest revoke-and-reinvite run stays silent.
   61 tests.
+
+- **Stage 12 (conflicts + migration).** The demo schema now ships two real
+  versions: v2 renames `issues.priority` to `issues.severity` and
+  normalizes `med`→`medium` — a field rename, chosen deliberately because
+  it makes v1 op payloads *unapplyable* as-is, so the migrators have to
+  actually work. Both migrators are total by type (`Op`, never `Op | null`),
+  which is what turns "no acknowledged write is lost across a migration"
+  into a property of the signature rather than a promise. Server accepts
+  ops in [minWritable, current] and migrates on arrival; below the floor is
+  a per-op `rejected: "version"` in pushAck, never a bare error frame;
+  above the ceiling is a fatal VERSION_TOO_NEW. **The mandated test passes**:
+  a v1 client goes offline, queues four v1-shaped writes (including one to
+  the renamed field and a create), the world advances at v2 meanwhile, the
+  client upgrades — migrating local rows and every queued op while
+  preserving identities — reconnects, and all four land in migrated form
+  with nothing rejected, nothing dropped, the witness's concurrent write
+  intact, and everyone converged. LWW verified for different-field merges,
+  same-field races resolving identically on both clients by server order,
+  stale offline edits landing last, and convergence across five seeded
+  interleavings with connection drops. 70 tests.
 
 ## NEEDS-HUMAN
 

@@ -26,6 +26,7 @@ import {
   DEMO_WORKSPACES,
   MIN_WRITABLE_VERSION,
   SEED_CLIENT_ID,
+  migrateOp,
   seedOps,
 } from 'syncline-demo-schema';
 import { createSqliteStorage } from './sqlite.js';
@@ -57,7 +58,7 @@ const getWorkspace = (workspaceId: string): Workspace | undefined => {
     schemaVersion: DEMO_SCHEMA_VERSION,
     minWritableVersion: MIN_WRITABLE_VERSION,
     ruleset: DEMO_RULESET,
-    migrateOp: (op) => op,
+    migrateOp,
   };
   const created: Workspace = { state: createWorkspace(), storage, config, sockets: new Map() };
   if (storage.getMeta('seeded') !== '1') {
