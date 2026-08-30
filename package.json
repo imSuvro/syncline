@@ -1,0 +1,22 @@
+{
+  "name": "syncline-monorepo",
+  "private": true,
+  "packageManager": "pnpm@11.24.0",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b && tsc -p apps/server-cf && tsc -p apps/demo",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "pack-check": "attw --pack packages/protocol --profile esm-only && attw --pack packages/client --profile esm-only"
+  },
+  "devDependencies": {
+    "@arethetypeswrong/cli": "^0.18.2",
+    "@types/node": "^22.10.0",
+    "eslint": "^9.34.0",
+    "tsx": "^4.20.4",
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.40.0",
+    "vitest": "^3.2.4"
+  }
+}

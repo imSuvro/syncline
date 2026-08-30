@@ -1,0 +1,21 @@
+{
+  "name": "@syncline/client",
+  "version": "0.1.0",
+  "description": "Local-first sync client: IndexedDB-backed store, durable outbox, reactive queries, optimistic apply with server reconciliation, and active forget on permission revocation",
+  "keywords": ["sync", "local-first", "offline-first", "indexeddb", "outbox", "reactive"],
+  "author": "Suvra Samajder",
+  "license": "MIT",
+  "repository": { "type": "git", "url": "git+https://github.com/imSuvro/syncline.git", "directory": "packages/client" },
+  "homepage": "https://github.com/imSuvro/syncline#readme",
+  "type": "module",
+  "sideEffects": false,
+  "files": ["dist"],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" }
+  },
+  "dependencies": {
+    "@syncline/protocol": "workspace:*"
+  }
+}

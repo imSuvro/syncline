@@ -1,0 +1,11 @@
+{
+  "files": [],
+  "references": [
+    { "path": "packages/protocol" },
+    { "path": "packages/demo-schema" },
+    { "path": "packages/client" },
+    { "path": "packages/server" },
+    { "path": "packages/harness" },
+    { "path": "packages/server-node" }
+  ]
+}
