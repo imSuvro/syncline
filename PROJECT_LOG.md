@@ -24,7 +24,7 @@ a member in one browser and their local data vanishes in the other.
 | 12 | Conflicts + migration | Dev | done | v0.13 |
 | 13 | Demo app | Dev | done | v0.14 |
 | 14 | Testing | QA | done | v0.15 |
-| 15 | Review | QA/Dev | pending | |
+| 15 | Review | QA/Dev | done | v0.16 |
 | 16 | Deploy | DevOps | pending | |
 | 17 | Launch | Product Owner | pending | |
 
@@ -265,6 +265,36 @@ Tag mapping (1b gets its own tag): stage 1→v0.1, 1b→v0.2, 2→v0.3, 3→v0.4
   artifacts uploaded) as a fifth required context, plus a nightly workflow
   running a rolling 5,000 seeds across three shapes (broad, churn,
   crowded). 78 tests.
+
+- **Stage 15 (review).** An adversarial full-codebase review found 13
+  substantive issues; six were high severity and all six are fixed, with
+  regression tests that fail against the previous code:
+  (1) `clientId` was never bound to the authenticated user — since client
+  ids ride every ops frame, any member could claim another's device id and
+  advance their dedup marks, silently destroying their pending writes; hello
+  now refuses a clientId owned by someone else. (2) The push loop read the
+  author's role once per batch, so a batch that revoked its own author kept
+  authorizing the remaining ops as owner — role is now re-read per op.
+  (3) The Cloudflare adapter rebuilt core connection state on wake but not
+  its connId→socket map, so every frame to a hibernated peer — ops,
+  presence, and the forget itself — was dropped into a `?.` with no error;
+  found independently by the review and by production testing. (4) CF token
+  verification decoded the signature outside its try, so one malformed
+  token reset the Durable Object and dropped every other socket on it —
+  unauthenticated, repeatable. (5) A device offline through a revoke woke
+  to cleared server marks and an un-renumbered outbox, tripping OP_GAP into
+  an infinite reconnect loop; a new epoch now resets the op-id sequence on
+  both sides by the same rule. (6) The demo keyed its device id and local
+  store per browser rather than per persona, so switching users booted the
+  next persona from the previous one's data. Also fixed: the unauthenticated
+  `/directory` endpoint (token-gated now, both adapters), a floating
+  directory-flush promise that could strand a revoke, a SQLite `tx`
+  re-entrancy trap, duplicate live memberships making role resolution
+  depend on adapter scan order, and a latin1/UTF-8 mismatch that could
+  resolve one token to different principals across runtimes. Four findings
+  were judged latent (they need a row-scoped read predicate no shipped
+  ruleset uses) and are recorded in the review rather than patched blindly.
+  83 tests, 1,000 fuzz seeds green after the changes.
 
 ## NEEDS-HUMAN
 

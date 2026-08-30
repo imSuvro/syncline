@@ -163,6 +163,16 @@ const handleBoot = (
 const handleFrame = (state: ClientState, frame: ServerFrame): ClientEffect[] => {
   switch (frame.t) {
     case 'helloAck': {
+      // A new epoch starts a fresh op-id sequence: the server clears this
+      // client's dedup marks whenever it answers with a snapshot, so the
+      // outbox is renumbered from 1 to match. Identities change here and
+      // only here — the ops themselves are untouched, so nothing is lost.
+      // Without this, a device that was offline through a revoke would
+      // replay high op ids against a cleared mark and trip OP_GAP forever.
+      if (frame.mode === 'snapshot' && state.cursor?.epoch !== frame.epoch) {
+        state.outbox = state.outbox.map((p, i) => ({ ...p, opId: i + 1 }));
+        state.nextOpId = state.outbox.length + 1;
+      }
       state.epoch = frame.epoch;
       state.presence = frame.presence;
       state.reconnectAttempts = 0;

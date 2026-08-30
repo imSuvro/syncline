@@ -25,8 +25,10 @@ export const login = async (userId: string): Promise<{ token: string; user: Demo
   return (await res.json()) as { token: string; user: DemoUser };
 };
 
-export const fetchDirectory = async (userId: string): Promise<WorkspaceSummary[]> => {
-  const res = await fetch(`${SERVER_URL}/directory?userId=${encodeURIComponent(userId)}`);
+export const fetchDirectory = async (token: string): Promise<WorkspaceSummary[]> => {
+  const res = await fetch(`${SERVER_URL}/directory`, {
+    headers: { authorization: `Bearer ${token}` },
+  });
   if (!res.ok) return [];
   return ((await res.json()) as { workspaces: WorkspaceSummary[] }).workspaces;
 };

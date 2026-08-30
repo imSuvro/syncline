@@ -165,7 +165,15 @@ const httpServer = createServer((req, res) => {
       return;
     }
     if (req.method === 'GET' && url.pathname === '/directory') {
-      const userId = url.searchParams.get('userId') ?? '';
+      // Token-gated: a query parameter must not be able to enumerate another
+      // principal's memberships (mirrors the Cloudflare adapter).
+      const auth = req.headers.authorization ?? '';
+      const claims = verifyToken(auth.replace(/^Bearer /i, ''), SECRET, Date.now());
+      if (claims === null) {
+        json(res, 401, { error: 'missing or invalid token' });
+        return;
+      }
+      const userId = claims.sub;
       const list = DEMO_WORKSPACES.filter((w) =>
         directoryMembers.get(w.workspaceId)?.has(userId) === true,
       ).map((w) => ({ workspaceId: w.workspaceId, name: w.name }));

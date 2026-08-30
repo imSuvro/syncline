@@ -28,6 +28,7 @@ export const createSqliteStorage = (path: string): ServerStorage => {
     getMark: db.prepare('SELECT opId FROM marks WHERE clientId = ?'),
     setMark: db.prepare('INSERT INTO marks (clientId, opId) VALUES (?, ?) ON CONFLICT (clientId) DO UPDATE SET opId = excluded.opId'),
     setOwner: db.prepare('INSERT INTO owners (clientId, userId) VALUES (?, ?) ON CONFLICT (clientId) DO UPDATE SET userId = excluded.userId'),
+    getOwner: db.prepare('SELECT userId FROM owners WHERE clientId = ?'),
     clearMarks: db.prepare('DELETE FROM marks WHERE clientId IN (SELECT clientId FROM owners WHERE userId = ?)'),
     getEpoch: db.prepare('SELECT data FROM epochs WHERE userId = ?'),
     setEpoch: db.prepare('INSERT INTO epochs (userId, data) VALUES (?, ?) ON CONFLICT (userId) DO UPDATE SET data = excluded.data'),
@@ -72,6 +73,9 @@ export const createSqliteStorage = (path: string): ServerStorage => {
     setClientOwner(clientId: string, userId: string): void {
       stmt.setOwner.run(clientId, userId);
     },
+    getClientOwner(clientId: string): string | undefined {
+      return (stmt.getOwner.get(clientId) as { userId: string } | undefined)?.userId;
+    },
     clearMarksForUser(userId: string): void {
       stmt.clearMarks.run(userId);
     },
@@ -109,6 +113,8 @@ export const createSqliteStorage = (path: string): ServerStorage => {
         db.exec('ROLLBACK');
         throw e;
       } finally {
+        // Only the outermost call owns the flag; a nested call returns above
+        // without ever reaching here, so this cannot clear it prematurely.
         inTx = false;
       }
     },

@@ -64,6 +64,9 @@ export const createDoStorage = (ctx: DurableObjectState): ServerStorage => {
     setClientOwner(clientId: string, userId: string): void {
       sql.exec('INSERT INTO owners (clientId, userId) VALUES (?, ?) ON CONFLICT (clientId) DO UPDATE SET userId = excluded.userId', clientId, userId);
     },
+    getClientOwner(clientId: string): string | undefined {
+      return one<{ userId: string }>('SELECT userId FROM owners WHERE clientId = ?', clientId)?.userId;
+    },
     clearMarksForUser(userId: string): void {
       sql.exec('DELETE FROM marks WHERE clientId IN (SELECT clientId FROM owners WHERE userId = ?)', userId);
     },

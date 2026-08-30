@@ -29,8 +29,8 @@ export const App = (): ReactElement => {
   const [error, setError] = useState<string | null>(null);
 
   const refreshDirectory = useCallback(
-    async (userId: string) => {
-      const list = await fetchDirectory(userId);
+    async (token: string) => {
+      const list = await fetchDirectory(token);
       setWorkspaces(list);
       setActiveWs((current) =>
         current !== null && list.some((w) => w.workspaceId === current)
@@ -45,7 +45,7 @@ export const App = (): ReactElement => {
     try {
       const result = await login(userId);
       setSession(result);
-      await refreshDirectory(userId);
+      await refreshDirectory(result.token);
     } catch {
       setError('Could not reach the sync server. Is it running?');
     }
@@ -66,7 +66,7 @@ export const App = (): ReactElement => {
         setWorkspaces([]);
         setActiveWs(null);
       }}
-      onDirectoryChange={() => void refreshDirectory(session.user.userId)}
+      onDirectoryChange={() => void refreshDirectory(session.token)}
     />
   );
 };
@@ -149,7 +149,7 @@ const Workspace = ({
   onSignOut,
   onDirectoryChange,
 }: WorkspaceProps): ReactElement => {
-  const sync = useSync(session.token, activeWs ?? 'none');
+  const sync = useSync(session.token, session.user.userId, activeWs ?? 'none');
   const [confirmRevoke, setConfirmRevoke] = useState<{ rowId: string; name: string } | null>(null);
   const [offline, setOffline] = useState(false);
   const [newTitle, setNewTitle] = useState('');

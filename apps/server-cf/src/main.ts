@@ -81,6 +81,10 @@ export class WorkspaceDO implements DurableObject {
   private readonly env: Bindings;
   private readonly state: WorkspaceState;
   private config: WorkspaceConfig;
+  // Declared before the constructor: the constructor body repopulates them
+  // from surviving sockets, so their initializers must have run first.
+  private readonly sockets = new Map<string, WebSocket>();
+  private readonly socketMeta = new Map<WebSocket, SocketMeta>();
 
   constructor(ctx: DurableObjectState, env: Bindings) {
     this.ctx = ctx;
@@ -97,13 +101,20 @@ export class WorkspaceDO implements DurableObject {
       ruleset: DEMO_RULESET,
       migrateOp,
     };
-    // Rebuild connection registry from hibernation-surviving sockets.
+    // Rebuild BOTH registries from hibernation-surviving sockets: the core's
+    // connection state and this object's connId→socket map. Missing the
+    // second one silently breaks every outbound frame addressed to a
+    // connection this instance did not itself accept — including the forget
+    // that revocation depends on.
     for (const ws of ctx.getWebSockets()) {
-      const meta = ws.deserializeAttachment() as { conn?: string } | null;
-      if (meta?.conn !== undefined) {
-        const connId = (JSON.parse(meta.conn) as { connId?: string }).connId;
-        if (connId !== undefined) rehydrateConnection(this.state, connId, meta.conn);
-      }
+      const raw = ws.deserializeAttachment() as { pre?: string; conn?: string } | null;
+      const blob = raw?.conn ?? raw?.pre;
+      if (blob === undefined) continue;
+      const connId = (JSON.parse(blob) as { connId?: string }).connId;
+      if (connId === undefined) continue;
+      this.sockets.set(connId, ws);
+      this.socketMeta.set(ws, { connId, helloDone: raw?.conn !== undefined });
+      if (raw?.conn !== undefined) rehydrateConnection(this.state, connId, raw.conn);
     }
   }
 
@@ -144,9 +155,6 @@ export class WorkspaceDO implements DurableObject {
     return new Response(null, { status: 101, webSocket: client });
   }
 
-  private readonly sockets = new Map<string, WebSocket>();
-  private readonly socketMeta = new Map<WebSocket, SocketMeta>();
-
   private metaFor(ws: WebSocket): SocketMeta {
     let meta = this.socketMeta.get(ws);
     if (meta === undefined) {
@@ -165,8 +173,15 @@ export class WorkspaceDO implements DurableObject {
     const storage = this.storage();
     const effects = storage.tx(() => workspaceStep(this.state, this.config, storage, input));
     for (const effect of effects) this.execute(effect);
-    // Directory propagation (C6): at-least-once, retried via alarm.
-    if (storage.peekDirectory(1).length > 0) void this.flushDirectory();
+    // Directory propagation (C6): at-least-once, retried via alarm. The
+    // alarm is armed BEFORE the flush and cleared on success, so an idle
+    // eviction that cancels the in-flight subrequest still leaves a retry
+    // scheduled — otherwise a revoke landing just before quiet would sit in
+    // the outbox indefinitely.
+    if (storage.peekDirectory(1).length > 0) {
+      void this.ctx.storage.setAlarm(Date.now() + 30_000);
+      this.ctx.waitUntil(this.flushDirectory());
+    }
   }
 
   /** Drain the directory outbox to DirectoryDO; on failure, retry by alarm. */
@@ -183,7 +198,11 @@ export class WorkspaceDO implements DurableObject {
       });
       if (!res.ok) throw new Error(`directory answered ${String(res.status)}`);
       for (const p of pending) storage.ackDirectory(p.id);
-      if (storage.peekDirectory(1).length > 0) void this.flushDirectory();
+      if (storage.peekDirectory(1).length > 0) {
+        await this.flushDirectory();
+      } else {
+        await this.ctx.storage.deleteAlarm();
+      }
     } catch {
       void this.ctx.storage.setAlarm(Date.now() + 30_000);
     }
@@ -297,7 +316,14 @@ export class DirectoryDO implements DurableObject {
       return json(200, { token, user });
     }
     if (request.method === 'GET' && url.pathname === '/directory') {
-      const userId = url.searchParams.get('userId') ?? '';
+      // The directory lists a principal's workspaces, so it needs the token:
+      // trusting a query parameter would let anyone enumerate anyone's
+      // memberships. (Password-less persona login is deliberate; handing out
+      // other people's data is not.)
+      const auth = request.headers.get('authorization') ?? '';
+      const claims = await verifyToken(auth.replace(/^Bearer /i, ''), this.env.JWT_SECRET, Date.now());
+      if (claims === null) return json(401, { error: 'missing or invalid token' });
+      const userId = claims.sub;
       const rows = sql
         .exec('SELECT workspaceId FROM members WHERE userId = ?', userId)
         .toArray() as { workspaceId: string }[];
