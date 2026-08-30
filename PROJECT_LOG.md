@@ -14,7 +14,7 @@ a member in one browser and their local data vanishes in the other.
 | 2 | Product definition (PRD) | Product Owner | done | v0.3 |
 | 3 | Feasibility spike | Architect | done | v0.4 |
 | 4 | UX | UX Designer | done | v0.5 |
-| 5 | Architecture (ADRs) | Architect | pending | |
+| 5 | Architecture (ADRs) | Architect | done | v0.6 |
 | 6 | Planning (backlog) | Product Owner | pending | |
 | 7 | Repo + CI | DevOps | pending | |
 | 8 | Server foundation | Dev | pending | |
@@ -107,6 +107,23 @@ Tag mapping (1b gets its own tag): stage 1→v0.1, 1b→v0.2, 2→v0.3, 3→v0.4
   expose. High-fidelity mockups: docs/design/mockups.html, published as a
   Claude artifact:
   https://claude.ai/code/artifact/0a897e70-57a3-4184-b8bd-613499eb1569
+
+- **Stage 5 (architecture).** ADRs 001–007 ratified: sans-IO cores with an
+  effect model (client storage async+barriered, server storage synchronous
+  injected); protocol v1 messages with op identity gapless per
+  (clientId, workspaceId), per-workspace seq, {seq, epoch} cursors, and an
+  incremental≡snapshot equivalence guarantee; declarative JSON ruleset with
+  a single branded-type evaluation point in the sync path; explicit
+  idempotent forget with epoch bumps, mark/counter resets, and a
+  receive-time staleness check for hibernation-surviving sockets; per-field
+  LWW stamped by server seq with two-channel outbox retirement; schema
+  negotiation with total op migrators and the old-code vs old-store split;
+  DO topology (WorkspaceDO + DirectoryDO with at-least-once membership
+  propagation) behind one adapter interface with Node parity. An
+  adversarial cross-consistency review found 24 findings (7 must-fix
+  contract contradictions, incl. the forget-vs-gap-rule clash, the missing
+  live-epoch-change mechanism, and the unspecified invite propagation) —
+  all resolved with canonical rulings before ratification.
 
 ## NEEDS-HUMAN
 
