@@ -26,7 +26,7 @@ a member in one browser and their local data vanishes in the other.
 | 14 | Testing | QA | done | v0.15 |
 | 15 | Review | QA/Dev | done | v0.16 |
 | 16 | Deploy | DevOps | done | v0.17 |
-| 17 | Launch | Product Owner | pending | |
+| 17 | Launch | Product Owner | done | v0.18 |
 
 Tag mapping (1b gets its own tag): stage 1→v0.1, 1b→v0.2, 2→v0.3, 3→v0.4,
 4→v0.5, 5→v0.6, 6→v0.7, 7→v0.8, 8→v0.9, 9→v0.10, 10→v0.11, 11→v0.12,
@@ -320,7 +320,42 @@ Tag mapping (1b gets its own tag): stage 1→v0.1, 1b→v0.2, 2→v0.3, 3→v0.4
   newly token-gated directory request even though the endpoint worked
   under curl.
 
+- **Stage 17 (launch).** `docs/protocol.md` specifies the wire protocol
+  end to end — frames, op identity, cursor/epoch semantics, the permission
+  rule language and where it is evaluated, forget, per-field LWW, schema
+  negotiation, the error-code table, and a closing section naming what is
+  deliberately unsupported. `docs/writeup.md` is the design essay: the gap
+  the survey found, what "enforced in the sync layer" structurally means,
+  what per-field LWW costs (stated as a reachable user-visible defect, not
+  buried), why CRDTs and revocation pull against each other, what the
+  offline-device limit really is, and which verification layer caught which
+  class of bug. README is recruiter-facing with both live URLs, the
+  three-step demo script, the architecture diagram, and the honest
+  limitations section. Packages remain attw-green.
+
 ## NEEDS-HUMAN
+
+- **npm publish auth** (the only outstanding item; nothing else is blocked).
+  `@syncline/protocol` and `@syncline/client` are publish-ready — metadata,
+  exports map, and `attw --pack --profile esm-only` verified green in CI on
+  every PR. Publishing needs an npm login this machine does not have:
+  1. Run `npm login` and complete the browser prompt. Verify with
+     `npm whoami` — it should print your npm username.
+  2. Create the scope so it can't be sniped: open
+     https://www.npmjs.com/org/create, enter **syncline** as the org name,
+     and choose the **Free** plan (public packages only — no card).
+  3. From the repo root, run `pnpm build` so `dist/` is current.
+  4. `cd packages/protocol && npm publish --access public`
+  5. `cd ../client && npm publish --access public`
+  6. Verify: `npm view @syncline/protocol version` prints `0.1.0`.
+  If step 2 reports the org name is taken, publish under `@syncline-dev`
+  instead: change the `name` field in both package.json files and the
+  `@syncline/*` imports in `packages/client`, `packages/server`,
+  `packages/harness`, and `apps/*`, then repeat from step 3.
+
+- **RESOLVED — server hosting** (was DECISION REQUIRED; the recommended
+  option needed no human action and is now deployed and verified live).
+  Original entry retained below for the record.
 
 - **DECISION REQUIRED: server hosting** (from stage 1b, `docs/adr/000-hosting.md`).
   *Recommendation:* Cloudflare Workers + SQLite-backed Durable Objects — the only
